@@ -129,7 +129,7 @@ export default function CompanyDetailTabs({
         <div className="subsection" style={{ marginBottom: 0 }}>
           <div className="subsection-title">
             Projects
-            <NewProjectButton companies={companies} defaultCompanyId={company.id} />
+            <NewProjectButton companies={companies} clients={clients} team={team} defaultCompanyId={company.id} />
           </div>
           <table className="mini">
             <tbody>
@@ -154,7 +154,7 @@ export default function CompanyDetailTabs({
                   <td><span className={projectStatusBadge[p.status] ?? "badge pending"}>{p.status}</span></td>
                   <td>{p.deadline ?? "—"}</td>
                   <td>{p.renderPriority ?? "—"}</td>
-                  <td><EditProjectButton project={p} companies={companies} /></td>
+                  <td><EditProjectButton project={p} companies={companies} clients={clients} team={team} /></td>
                 </tr>
               ))}
             </tbody>

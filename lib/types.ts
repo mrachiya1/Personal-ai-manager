@@ -61,6 +61,17 @@ export interface Project {
   reviewedBy: string[];
   /** Notion's own last_edited_time — no property needed, it is always present. */
   lastEditedTime?: string;
+  /** Attachments on the project page. */
+  files: ProjectFile[];
+}
+
+export interface ProjectFile {
+  name: string;
+  /** Notion-hosted URLs are signed and expire after about an hour, so they are
+   *  fetched fresh on each page render rather than stored anywhere. */
+  url: string;
+  /** "file" = uploaded to Notion, "external" = a link someone pasted in. */
+  kind: "file" | "external";
 }
 
 export type TaskStatus = "Backlog" | "In Progress" | "Done" | "Blocked";

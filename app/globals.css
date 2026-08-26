@@ -432,8 +432,34 @@ html[data-theme="dark"] .idea-tag{ background:#302e28; }
 .form-field textarea:focus{ outline:2px solid var(--blue); outline-offset:1px; }
 .form-field textarea{ resize:vertical; min-height:70px; }
 .form-row{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+
+/* Assignee picker inside the New/Edit Project modal. Chips rather than a
+   multi-select box: a native <select multiple> needs ctrl-click to add a
+   second person, which nobody discovers. */
+.form-chips{ display:flex; flex-wrap:wrap; gap:6px; max-height:132px; overflow-y:auto; padding:2px; }
+.form-chip{
+  display:inline-flex; align-items:center; min-height:30px; padding:0 11px;
+  border:1px solid var(--line); border-radius:999px; background:var(--surface);
+  color:var(--ink); font-size:12.5px; font-weight:500; cursor:pointer;
+  white-space:nowrap; transition:background .12s, border-color .12s, color .12s;
+}
+.form-chip:hover{ background:var(--field); color:var(--ink); }
+.form-chip.on{ background:var(--blue); border-color:var(--blue); color:#fff; }
+.form-chip.on:hover{ background:var(--blue); color:#fff; }
+.form-chip:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
+.form-field select:disabled{ opacity:.55; cursor:not-allowed; }
 .form-check{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-secondary); }
-.form-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+/* Pinned to the bottom edge of the scrolling modal. The project form grew
+   past one screen, and Save sitting below the fold of a scroll container
+   reads as a form with no way to submit it. Negative margins cancel the
+   modal's own padding so the bar spans the full width. */
+.form-actions{
+  display:flex; justify-content:flex-end; gap:8px;
+  position:sticky; bottom:-24px; z-index:1;
+  margin:20px -24px -24px; padding:14px 24px;
+  background:var(--surface-raised); border-top:1px solid var(--line);
+  border-radius:0 0 16px 16px;
+}
 .form-error{ color:var(--critical); font-size:12.5px; margin-top:6px; }
 .link-btn{ background:none; border:none; padding:0; color:var(--blue); font-size:12.5px; font-weight:600; cursor:pointer; }
 
@@ -1063,4 +1089,175 @@ table.dt.pw-table td{ overflow:hidden; }
 table.dt.pw-table .pw-cell > span{ overflow:hidden; text-overflow:ellipsis; }
 /* The timeline column packs two dates plus an urgency chip; let it wrap
    rather than clip when a project is overdue. */
-table.dt.pw-table td:nth-child(5) > div{ flex-wrap:wrap; row-gap:2px; }
+
+
+/* ==================================================================
+   DESIGN REVIEW FIXES
+   Each block below is a defect found by rendering every screen at
+   desktop, dark and phone widths and auditing the result.
+   ================================================================== */
+
+/* --- 1. The sidebar rail stopped at the fold ---------------------
+   The sidebar is sticky and one viewport tall, so on any page longer
+   than the window its background simply ended and the nav appeared to
+   float in mid-air. Painting the rail on the frame instead means the
+   column reads as continuous however long the page gets. */
+.app-frame{
+  background:
+    linear-gradient(to right, var(--rail) 0 246px, var(--canvas) 246px);
+}
+.sidebar{
+  background:transparent;
+  height:calc(100vh - 20px);
+  max-height:calc(100vh - 20px);
+  overflow:hidden;               /* the inner region scrolls, not the rail */
+  align-self:flex-start;
+}
+/* --- 2. Nav items below the fold were unreachable ------------------
+   With seventeen destinations the list outgrew the viewport, and the
+   account footer — the only route to sign-out — was pushed off the
+   bottom entirely. Scroll the middle, pin the ends. */
+.sidebar-scroll{
+  flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain;
+  margin:0 -4px; padding:0 4px;
+}
+.sidebar-scroll::-webkit-scrollbar{ width:6px; }
+.sidebar-scroll::-webkit-scrollbar-thumb{ background:var(--border-strong); border-radius:99px; }
+.sidebar-scroll::-webkit-scrollbar-track{ background:transparent; }
+.sidebar-footer{ flex-shrink:0; margin-top:0; padding-top:12px; }
+
+/* --- 3. Avatar and swatch initials were 8.5px ---------------------
+   Below roughly 10px, two-letter initials stop being legible and just
+   read as texture. Bigger marks, bigger type. */
+.nav-swatch{ width:18px; height:18px; font-size:9.5px; }
+.avatar-stack .av{ width:23px; height:23px; font-size:9.5px; }
+.avatar-stack .av.more{ font-size:9px; }
+table.dt .nav-swatch{ width:21px; height:21px; border-radius:6px; }
+
+/* --- 4. Tap targets under 28px ------------------------------------
+   Small square controls kept their visual size but gain a hit area,
+   which is what actually matters on a touch screen. */
+.ws-action, .pw-expand, .icon-btn{ position:relative; }
+.ws-action::after, .pw-expand::after{
+  content:""; position:absolute; inset:-7px; border-radius:9px;
+}
+@media (max-width: 860px){
+  .ws-action::after, .pw-expand::after{ inset:-12px; }
+  .pw-expand{ width:26px; height:26px; }
+  .pw-expand svg{ width:14px; height:14px; }
+}
+
+/* --- 5. The mobile menu button sat on top of page content ---------
+   It is fixed at the top-left, and the topbar compensated with left
+   padding — but anything rendered above the topbar (the setup banner)
+   collided with it. Clearing the space on the container fixes it for
+   every first child, present and future. */
+@media (max-width: 880px){
+  .main{ padding-top:60px; }
+  .topbar{ padding-left:0; }
+}
+
+/* --- 6. The chat button covered table rows and the bottom nav ----- */
+.main{ padding-bottom:96px; }
+@media (max-width: 880px){
+  .chat-fab{ bottom:calc(78px + env(safe-area-inset-bottom)); width:46px; height:46px; }
+  .main{ padding-bottom:108px; }
+}
+
+/* --- 7. Status badges and pills were clipping inside table cells -- */
+table.dt .badge,
+table.dt .prio,
+table.dt .type-pill{ white-space:nowrap; max-width:100%; }
+table.dt.pw-table .badge{ font-size:10.5px; padding:3px 7px; }
+table.dt.pw-table .prio{ font-size:10.5px; padding:3px 7px; }
+
+/* --- 8. Stat tiles went ragged when a label wrapped ---------------
+   Equal heights, with the label reserving two lines so a long one
+   doesn't shove its number down out of line with its neighbours. */
+.stat-grid{ align-items:stretch; }
+.card.stat-tile{ display:flex; flex-direction:column; }
+.card.stat-tile .stat-label{ min-height:2.4em; display:block; line-height:1.2; }
+.card.stat-tile .stat-delta{ margin-top:auto; padding-top:6px; }
+
+/* --- 9. Section headers cramped on a phone ------------------------ */
+@media (max-width: 860px){
+  .panel-head{ flex-wrap:wrap; row-gap:6px; }
+  .panel-head .panel-title{ flex:1 1 auto; min-width:0; }
+  .section-title-row{ gap:10px; }
+  .section-title-row h2{ font-size:15px; }
+  .topbar h1{ font-size:22px; }
+  .topbar-actions{ width:100%; justify-content:flex-start; }
+}
+
+/* ---------- Project files ---------- */
+.pw-folder-crumb{
+  display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:600;
+  text-transform:none; letter-spacing:0; color:var(--ink-muted);
+  background:var(--surface-raised); border:1px solid var(--border);
+  border-radius:6px; padding:2px 7px;
+}
+.pw-folder-crumb svg{ width:11px; height:11px; }
+.pw-file-row{
+  display:flex; align-items:center; gap:8px; padding:6px 0;
+  border-top:1px solid var(--border); font-size:12.5px;
+}
+.pw-file-row:first-child{ border-top:none; }
+.pw-file-icon{ width:15px; height:15px; color:var(--ink-muted); flex-shrink:0; }
+.pw-file-icon svg{ width:15px; height:15px; }
+.pw-file-name{ color:var(--ink-secondary); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+a.pw-file-name:hover{ color:var(--ink); text-decoration:underline; }
+.pw-drop{
+  border:1.5px dashed var(--border-strong); border-radius:10px; padding:14px;
+  text-align:center; font-size:12px; color:var(--ink-muted); cursor:pointer;
+  background:var(--surface-raised); transition:border-color .15s ease, background .15s ease;
+}
+.pw-drop:hover{ border-color:var(--ink-muted); }
+.pw-drop.on{ border-color:var(--ink); background:var(--rail); color:var(--ink-secondary); }
+/* Explicit buttons under the drop hint. Dropping is not discoverable on its
+   own, and picking a whole folder has no drag equivalent at all in most
+   browsers. */
+.pw-drop-alt{ display:flex; justify-content:center; align-items:center; gap:8px; margin-top:7px; }
+.pw-drop-alt button{
+  background:none; border:none; padding:4px 2px; font:inherit; font-weight:600;
+  color:var(--ink); cursor:pointer; text-decoration:underline; text-underline-offset:2px;
+  text-decoration-color:var(--border-strong); min-height:26px;
+}
+.pw-drop-alt button:hover{ text-decoration-color:var(--ink); }
+.pw-drop-alt button:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; border-radius:4px; }
+
+/* ---------- Folder tree ---------- */
+.pw-tree{ padding:8px; }
+.pw-tree-row{
+  display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+  padding:6px 9px; border:none; background:none; border-radius:7px;
+  font-family:inherit; font-size:12.8px; color:var(--ink-secondary); cursor:pointer;
+}
+.pw-tree-row:hover{ background:var(--rail); color:var(--ink); }
+.pw-tree-row.on{ background:var(--rail); color:var(--ink); font-weight:600; box-shadow:inset 0 0 0 1px var(--border); }
+.pw-tree-row.lvl0{ font-weight:600; color:var(--ink); }
+.pw-tree-row.lvl1{ padding-left:24px; }
+.pw-tree-row.lvl2{ padding-left:44px; }
+.pw-caret{ width:12px; height:12px; flex-shrink:0; opacity:.55; transition:transform .15s ease; }
+.pw-tree-icon{ width:14px; height:14px; flex-shrink:0; opacity:.6; }
+.pw-tree-label{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.pw-tree-row .count-chip svg{ width:9px; height:9px; }
+@media (max-width: 860px){
+  .pw-tree-row.lvl1{ padding-left:18px; }
+  .pw-tree-row.lvl2{ padding-left:32px; }
+}
+
+/* Folders view: tree on the left, the selected project beside it. */
+.pw-folders{ display:grid; grid-template-columns:minmax(260px, 330px) 1fr; gap:14px; align-items:start; }
+@media (max-width: 900px){ .pw-folders{ grid-template-columns:1fr; } }
+
+/* The timeline packs a start date, an end date and an urgency chip. It has to
+   wrap wherever it lands — in a narrow table cell or a detail grid column —
+   or the chip rides over the date it belongs to. */
+.pw-timeline{
+  display:flex; align-items:center; gap:4px; min-width:0;
+  flex-wrap:wrap; row-gap:3px;
+}
+.pw-timeline .pw-days{ flex-shrink:0; }
+/* "Rendering-Ready" is the longest status; give it room rather than clipping. */
+table.dt.pw-table .badge{ font-size:10px; padding:3px 6px; letter-spacing:-0.01em; }
+table.dt.pw-table .avatar-stack .av{ width:21px; height:21px; }

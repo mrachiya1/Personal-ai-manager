@@ -343,6 +343,10 @@ export default function Sidebar({
           <span className="kbd">⌘K</span>
         </button>
 
+        {/* Only this region scrolls. The workspace card and the account footer
+            stay put, so a nav taller than the viewport can never push the
+            sign-out control off-screen. */}
+        <div className="sidebar-scroll">
         {GROUPS.map((group, gi) => {
           const isCollapsed = Boolean(group.collapsible && collapsed[group.key]);
           return (
@@ -402,6 +406,7 @@ export default function Sidebar({
             </div>
           );
         })}
+        </div>
 
         <div className="sidebar-footer">
           <div className="avatar">

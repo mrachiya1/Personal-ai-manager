@@ -34,7 +34,9 @@ import { cache } from "react";
 import { getDbMap, getNotionToken, DEFAULT_DB } from "./userConfig";
 
 const NOTION_VERSION = "2022-06-28";
-const BASE_URL = "https://api.notion.com/v1";
+// Overridable so the app can be pointed at a stand-in Notion during UI work
+// and testing. Unset in every real environment, where it is the live API.
+const BASE_URL = process.env.NOTION_API_BASE_URL || "https://api.notion.com/v1";
 
 // Database IDs and the API key are resolved per request from the current
 // user's saved configuration, falling back to env. `dbMap()` and `notionKey()`
@@ -144,6 +146,19 @@ function email(props: any, key: string): string | undefined {
 function phone(props: any, key: string): string | undefined {
   return props?.[key]?.phone_number ?? undefined;
 }
+/** Notion returns uploaded files and pasted links in the same array, shaped differently. */
+function files(props: any, key: string): { name: string; url: string; kind: "file" | "external" }[] {
+  const list = props?.[key]?.files;
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((f: any) => ({
+      name: f?.name || "Untitled",
+      url: f?.file?.url || f?.external?.url || "",
+      kind: (f?.type === "external" ? "external" : "file") as "file" | "external",
+    }))
+    .filter((f: { url: string }) => f.url);
+}
+
 function relationIds(props: any, key: string): string[] {
   return props?.[key]?.relation?.map((r: any) => r.id) ?? [];
 }
@@ -266,37 +281,8 @@ async function _getProjects(): Promise<Project[]> {
     reviewedBy: relationIds(p.properties, "Reviewed By"),
     // Notion maintains this on every page; no property to create.
     lastEditedTime: p.last_edited_time,
+    files: files(p.properties, "Files"),
   }));
-}
-
-export async function createProject(input: {
-  name: string;
-  companyId?: string;
-  status?: string;
-  description?: string;
-  deadline?: string;
-  renderPriority?: string;
-  estimatedRenderHours?: number;
-}) {
-  return notionFetch("/pages", {
-    method: "POST",
-    body: JSON.stringify({
-      parent: { database_id: (await dbMap()).projects },
-      properties: {
-        Name: { title: [{ text: { content: input.name } }] },
-        ...(input.companyId ? { Company: { relation: [{ id: input.companyId }] } } : {}),
-        Status: { select: { name: input.status || "Idea" } },
-        ...(input.description !== undefined
-          ? { Description: { rich_text: [{ text: { content: input.description } }] } }
-          : {}),
-        ...(input.deadline ? { Deadline: { date: { start: input.deadline } } } : {}),
-        ...(input.renderPriority ? { "Render Priority": { select: { name: input.renderPriority } } } : {}),
-        ...(input.estimatedRenderHours !== undefined
-          ? { "Estimated Render Time (hrs)": { number: input.estimatedRenderHours } }
-          : {}),
-      },
-    }),
-  });
 }
 
 export interface ProjectUpdate {
@@ -318,12 +304,21 @@ export interface ProjectUpdate {
   reviewedBy: string[];
 }
 
-export async function updateProject(id: string, input: Partial<ProjectUpdate>) {
+/**
+ * Turns a partial project into Notion page properties.
+ *
+ * Shared by create and update so a field can never be editable in the table
+ * but silently dropped by the New Project form — which is exactly what
+ * happened when the two built their properties separately: a project created
+ * from the form had no client, so it landed outside every folder.
+ *
+ * A key that is absent is left untouched; a key present but empty clears the
+ * field, which in Notion means an empty rich_text array or a null date, not
+ * the string "". Getting that wrong writes the literal text "undefined" into
+ * people's databases.
+ */
+function projectProperties(input: Partial<ProjectUpdate>): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
-
-  // An empty string means "clear this field", which in Notion is an empty
-  // rich_text array or a null date — not the string "". Getting that wrong
-  // writes the literal text "undefined" into people's databases.
   const text = (v: string) => ({ rich_text: v ? [{ text: { content: v } }] : [] });
   const date = (v: string) => ({ date: v ? { start: v } : null });
   const rel = (ids: string[]) => ({ relation: ids.filter(Boolean).map((rid) => ({ id: rid })) });
@@ -349,7 +344,26 @@ export async function updateProject(id: string, input: Partial<ProjectUpdate>) {
   if (input.lastReviewed !== undefined) properties["Last Reviewed"] = date(input.lastReviewed);
   if (input.reviewedBy !== undefined) properties["Reviewed By"] = rel(input.reviewedBy);
 
-  return notionFetch(`/pages/${id}`, { method: "PATCH", body: JSON.stringify({ properties }) });
+  return properties;
+}
+
+export async function createProject(input: Partial<ProjectUpdate> & { name: string }) {
+  return notionFetch("/pages", {
+    method: "POST",
+    body: JSON.stringify({
+      parent: { database_id: (await dbMap()).projects },
+      // A brand-new page has no status at all, so default it rather than
+      // creating something that shows up nowhere on the board.
+      properties: projectProperties({ status: "Idea", ...input }),
+    }),
+  });
+}
+
+export async function updateProject(id: string, input: Partial<ProjectUpdate>) {
+  return notionFetch(`/pages/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ properties: projectProperties(input) }),
+  });
 }
 
 async function _getTasks(): Promise<Task[]> {

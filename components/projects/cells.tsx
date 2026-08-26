@@ -246,6 +246,8 @@ export function SelectCell({
   render,
   placeholder = "—",
   allowEmpty = true,
+  open: openProp,
+  onOpenChange,
 }: {
   value?: string;
   options: string[];
@@ -253,8 +255,19 @@ export function SelectCell({
   render?: (v: string) => ReactNode;
   placeholder?: string;
   allowEmpty?: boolean;
+  /**
+   * Open state may be owned by the parent. It has to be, in any list whose row
+   * components are re-created between renders: local state in this component
+   * would be thrown away with the old element identity the moment a save
+   * re-renders the list, closing the popover mid-edit. Left undefined, the
+   * cell keeps its own state, which is fine for one-off use.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = openProp ?? ownOpen;
+  const setOpen = onOpenChange ?? setOwnOpen;
   return (
     <div style={{ position: "relative" }}>
       <div className={`pw-cell is-picker${value ? "" : " empty"}`} onClick={() => setOpen(true)}>
@@ -303,6 +316,10 @@ export function MultiPickCell({
   placeholder = "—",
   searchable = false,
   heading,
+  open: openProp,
+  onOpenChange,
+  query: queryProp,
+  onQueryChange,
 }: {
   selected: string[];
   options: PickOption[];
@@ -311,9 +328,21 @@ export function MultiPickCell({
   placeholder?: string;
   searchable?: boolean;
   heading?: string;
+  /** See SelectCell — multi-select especially needs the parent to hold this,
+   *  since every tick saves and re-renders the list. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** The search box needs lifting for the same reason the open flag does:
+   *  otherwise a remount empties what the user typed after every tick. */
+  query?: string;
+  onQueryChange?: (q: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = openProp ?? ownOpen;
+  const setOpen = onOpenChange ?? setOwnOpen;
+  const [ownQ, setOwnQ] = useState("");
+  const q = queryProp ?? ownQ;
+  const setQ = onQueryChange ?? setOwnQ;
 
   const chosen = selected.map((id) => options.find((o) => o.id === id)).filter(Boolean) as PickOption[];
   const visible = q.trim()

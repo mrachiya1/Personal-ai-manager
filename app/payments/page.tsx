@@ -115,7 +115,7 @@ async function PaymentsBody({
     <>
       <section className="stat-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
         <div className="card stat-tile">
-          <span className="stat-label">Outstanding (overdue + upcoming)</span>
+          <span className="stat-label">Outstanding</span>
           <div className="stat-value">{formatMoney(totalOutstanding)}</div>
         </div>
         <div className="card stat-tile">

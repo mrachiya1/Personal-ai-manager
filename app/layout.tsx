@@ -7,6 +7,20 @@ import SetupBanner from "@/components/SetupBanner";
 import { DB_KEYS } from "@/lib/userConfig";
 import { AUTH_ENABLED, currentUser } from "@/auth";
 
+/**
+ * Nothing in this app may be prerendered at build time.
+ *
+ * Every page reads the signed-in user's own Notion workspace, so a static
+ * render would freeze whatever data existed when the build ran — which on a
+ * fresh deploy is nothing at all — and serve that same empty HTML to every
+ * user forever. Next statically renders any page that doesn't opt out, and
+ * twelve of them were silently doing exactly that.
+ *
+ * Declared once on the root layout so it applies to the whole tree and a new
+ * page can't quietly reintroduce the problem.
+ */
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Orex OS",
   description: "Personal Life & Company Intelligence — daily plan, clients, projects, and more.",
@@ -80,7 +94,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   user={user}
                   authEnabled={AUTH_ENABLED}
                   workspaceLabel="Orex OS"
-                  orgLabel={user?.name || "Personal & Company Intelligence"}
+                  orgLabel={user?.email || user?.name || "Personal workspace"}
                 />
                 <main className="main">
                   <SetupBanner unmappedCount={unmapped.length} total={DB_KEYS.length} />

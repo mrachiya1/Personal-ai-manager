@@ -1,0 +1,18 @@
+import { chromium } from "playwright";
+const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+const ctx = await b.newContext({ viewport: { width: 1440, height: 950 }, deviceScaleFactor: 1.5 });
+const p = await ctx.newPage();
+const errs = [];
+p.on("pageerror", (e) => errs.push(String(e).slice(0, 160)));
+await p.goto("http://localhost:5403/projects", { waitUntil: "networkidle" });
+await p.waitForTimeout(400);
+await p.locator(".pw-expand").first().click();
+await p.waitForTimeout(600);
+const drop = p.locator(".pw-drop").first();
+console.log("drop area:", await drop.count());
+console.log("text:", (await drop.innerText()).replace(/\n/g, " | "));
+console.log("folder input has webkitdirectory:", await p.locator('.pw-drop input[webkitdirectory]').count());
+const box = await drop.boundingBox();
+await p.screenshot({ path: "/tmp/ui/files.png", clip: { x: box.x - 20, y: box.y - 200, width: box.width + 40, height: 300 } });
+console.log("errors:", errs.length ? errs.join(" | ") : "none");
+await b.close();

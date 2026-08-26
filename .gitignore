@@ -46,3 +46,6 @@ next-env.d.ts
 
 # generated deploy secret (keep, never commit)
 .vercel-auth-secret.txt
+
+# UI review harness output
+/qa/*.log

@@ -1,12 +1,15 @@
 import Link from "next/link";
-import { getProjects, getCompanies, notionConnected } from "@/lib/notion";
+import { getProjects, getCompanies, getClients, getTeamMembers, notionConnected } from "@/lib/notion";
 import ConnectPrompt from "@/components/ConnectPrompt";
 import { NewProjectButton, EditProjectButton } from "@/components/ProjectForm";
 
 const priorityBadgeClass: Record<string, string> = { High: "badge high", Medium: "badge med", Low: "badge low" };
 
 export default async function RenderQueuePage() {
-  const companies = (await notionConnected()) ? await getCompanies() : [];
+  const connected = await notionConnected();
+  const [companies, clients, team] = connected
+    ? await Promise.all([getCompanies(), getClients(), getTeamMembers()])
+    : [[], [], []];
   return (
     <>
       <div className="topbar">
@@ -14,19 +17,27 @@ export default async function RenderQueuePage() {
           <div className="eyebrow">Companies · 3D / Motion</div>
           <h1 className="brand-serif">Render Queue</h1>
         </div>
-        {(await notionConnected()) && (
+        {connected && (
           <div className="topbar-actions">
-            <NewProjectButton companies={companies} defaultStatus="Rendering-Ready" label="Schedule Render" />
+            <NewProjectButton companies={companies} clients={clients} team={team} defaultStatus="Rendering-Ready" label="Schedule Render" />
           </div>
         )}
       </div>
-      {!(await notionConnected()) ? <ConnectPrompt /> : <RenderQueueBody companies={companies} />}
+      {!connected ? <ConnectPrompt /> : <RenderQueueBody companies={companies} clients={clients} team={team} />}
       <div className="footnote">Orex OS — Render Queue · live data from Notion (Projects, Status = Rendering-Ready)</div>
     </>
   );
 }
 
-async function RenderQueueBody({ companies }: { companies: Awaited<ReturnType<typeof getCompanies>> }) {
+async function RenderQueueBody({
+  companies,
+  clients,
+  team,
+}: {
+  companies: Awaited<ReturnType<typeof getCompanies>>;
+  clients: Awaited<ReturnType<typeof getClients>>;
+  team: Awaited<ReturnType<typeof getTeamMembers>>;
+}) {
   const projects = await getProjects();
   const companyById = (id: string) => companies.find((c) => c.id === id);
   const queue = projects
@@ -83,7 +94,7 @@ async function RenderQueueBody({ companies }: { companies: Awaited<ReturnType<ty
               </td>
               <td>{p.estimatedRenderHours ? `${p.estimatedRenderHours}h` : "—"}</td>
               <td>{p.deadline ?? "—"}</td>
-              <td><EditProjectButton project={p} companies={companies} /></td>
+              <td><EditProjectButton project={p} companies={companies} clients={clients} team={team} /></td>
             </tr>
           ))}
         </tbody>

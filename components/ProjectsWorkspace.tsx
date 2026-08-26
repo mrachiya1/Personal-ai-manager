@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import type { ClientRecord, Company, Project, Task, TeamMember } from "@/lib/types";
 import { NewProjectButton, EditProjectButton } from "@/components/ProjectForm";
 import AiInsights from "@/components/AiInsights";
+import FolderTree from "@/components/projects/FolderTree";
+import ProjectFiles from "@/components/projects/ProjectFiles";
 import {
   AvatarStack,
   DateCell,
@@ -82,10 +84,38 @@ export default function ProjectsWorkspace({
   const [taskRows, setTaskRows] = useState<Task[]>(tasks);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<{ text: string; err?: boolean } | null>(null);
-  const [tab, setTab] = useState<"all" | "board" | "overview">("all");
+  const [tab, setTab] = useState<"all" | "folders" | "board" | "overview">("all");
+  const [treeSelection, setTreeSelection] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  /**
+   * Which inline picker is open, as "<projectId>:<field>".
+   *
+   * This lives in the parent on purpose. The row components below are
+   * declared inside this function, so every render hands React a new
+   * component identity and the whole row subtree remounts — taking any
+   * local state with it. Since each tick of a multi-select saves, and
+   * saving re-renders, a popover owning its own open state closed itself
+   * after a single pick: Assigned and Category could never hold more than
+   * one value. Holding it here survives the remount.
+   */
+  const [openPicker, setOpenPicker] = useState<string | null>(null);
+  const [pickerQuery, setPickerQuery] = useState("");
+  const pickerProps = useCallback(
+    (key: string) => ({
+      open: openPicker === key,
+      onOpenChange: (next: boolean) => {
+        setOpenPicker(next ? key : null);
+        setPickerQuery("");
+      },
+    }),
+    [openPicker],
+  );
+  const multiPickProps = useCallback(
+    (key: string) => ({ ...pickerProps(key), query: pickerQuery, onQueryChange: setPickerQuery }),
+    [pickerProps, pickerQuery],
+  );
   const router = useRouter();
 
   /* ---------- lookups ---------- */
@@ -272,6 +302,7 @@ export default function ProjectsWorkspace({
       <div className="page-tabs">
         {([
           ["all", "All projects"],
+          ["folders", "Folders"],
           ["board", "Board"],
           ["overview", "Overview"],
         ] as const).map(([id, label]) => (
@@ -368,10 +399,93 @@ export default function ProjectsWorkspace({
             </div>
           )}
 
-          {tab === "board" ? (
+          {tab === "folders" ? (
+            <div className="pw-folders">
+              <div className="panel" style={{ marginBottom: 0 }}>
+                <div className="panel-head">
+                  <span className="panel-title">Company · Client · Project</span>
+                  <span className="count-chip">{filtered.length}</span>
+                </div>
+                <FolderTree
+                  projects={filtered}
+                  companies={companies}
+                  clients={clients}
+                  clientFor={effectiveClientId}
+                  selectedId={treeSelection ?? undefined}
+                  onSelect={(p) => setTreeSelection(p.id)}
+                  counts={{
+                    overdue: (p) => {
+                      const d = daysUntil(p.deadline, todayISO);
+                      return p.status !== "Delivered" && d !== null && d < 0;
+                    },
+                  }}
+                />
+              </div>
+
+              <div>
+                {(() => {
+                  const selected = filtered.find((p) => p.id === treeSelection) || filtered[0];
+                  if (!selected) {
+                    return (
+                      <div className="panel">
+                        <div className="dt-empty">Nothing to show.</div>
+                      </div>
+                    );
+                  }
+                  const c = cellsFor(selected);
+                  const client = clientById.get(effectiveClientId(selected));
+                  return (
+                    <div className="panel">
+                      <div className="panel-head">
+                        <span className="panel-title">{selected.name}</span>
+                        {c.urgencyChip}
+                        <div className="spacer" />
+                        <span className={statusBadge[selected.status] ?? "badge pending"}>{selected.status}</span>
+                      </div>
+                      <div className="pw-detail" style={{ paddingLeft: 20 }}>
+                        <div className="pw-detail-grid">
+                          <div>
+                            <div className="pw-field-label">Client</div>
+                            {c.clientCell}
+                          </div>
+                          <div>
+                            <div className="pw-field-label">Assigned</div>
+                            {c.assigned}
+                          </div>
+                          <div>
+                            <div className="pw-field-label">Timeline</div>
+                            {c.timeline}
+                          </div>
+                          <div>
+                            <div className="pw-field-label">Value</div>
+                            {c.value}
+                          </div>
+                        </div>
+                        {c.detail}
+                        <ProjectFiles
+                          projectId={selected.id}
+                          files={selected.files}
+                          companyName={companyById.get(selected.companyId)?.name}
+                          projectName={selected.name}
+                        />
+                        {client && (
+                          <div style={{ fontSize: 11.5, color: "var(--ink-muted)" }}>
+                            {clientProjectCount.get(client.id) || 1} project
+                            {(clientProjectCount.get(client.id) || 1) === 1 ? "" : "s"} running for {client.name}.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          ) : tab === "board" ? (
             <BoardView
               rows={filtered}
               companies={companies}
+              clients={clients}
+              team={team}
               taskStats={taskStats}
               todayISO={todayISO}
               onStatus={(p, status) => patch(p.id, { status: status as Project["status"] }, { status })}
@@ -456,14 +570,13 @@ export default function ProjectsWorkspace({
               between one client group and the next. */}
           <table className="dt pw-table">
             <colgroup>
-              <col style={{ width: 238 }} />
-              <col style={{ width: 132 }} />
-              <col style={{ width: 76 }} />
-              <col style={{ width: 90 }} />
+              <col style={{ width: 250 }} />
+              <col style={{ width: 128 }} />
+              <col style={{ width: 96 }} />
               <col style={{ width: 150 }} />
-              <col style={{ width: 94 }} />
-              <col style={{ width: 116 }} />
-              <col style={{ width: 80 }} />
+              <col style={{ width: 96 }} />
+              <col style={{ width: 138 }} />
+              <col style={{ width: 84 }} />
               <col style={{ width: 96 }} />
             </colgroup>
             <thead>
@@ -471,7 +584,6 @@ export default function ProjectsWorkspace({
                 <th>Project</th>
                 <th>Client</th>
                 <th>Assigned</th>
-                <th>Category</th>
                 <th>Timeline</th>
                 <th>Priority</th>
                 <th>Status</th>
@@ -513,17 +625,37 @@ export default function ProjectsWorkspace({
     const urgencyChip =
       dLeft !== null && p.status !== "Delivered" && dLeft <= 7 ? <DaysChip days={dLeft} /> : null;
 
+    const category = (
+      <MultiPickCell
+        selected={p.category}
+        options={categoryOptions}
+        heading="Category"
+        {...multiPickProps(`${p.id}:category`)}
+        placeholder="Tag"
+        onSave={(cat) => patch(p.id, { category: cat }, { category: cat })}
+        renderClosed={(chosen) => (
+          <span style={{ display: "inline-flex", gap: 4, alignItems: "center", whiteSpace: "nowrap" }}>
+            <span className="type-pill">{chosen[0].label}</span>
+            {chosen.length > 1 && <span className="cell-muted">+{chosen.length - 1}</span>}
+          </span>
+        )}
+      />
+    );
+
     const name = (
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0 }}>
         {expandButton}
         <div style={{ minWidth: 0, flex: 1 }}>
           <TextCell value={p.name} bold onSave={(name) => patch(p.id, { name }, { name })} placeholder="Untitled project" />
-          <div style={{ marginTop: 1 }}>
-            <TextCell
-              value={p.headline || ""}
-              placeholder="Add a headline…"
-              onSave={(headline) => patch(p.id, { headline }, { headline })}
-            />
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 1, minWidth: 0 }}>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <TextCell
+                value={p.headline || ""}
+                placeholder="Add a headline…"
+                onSave={(headline) => patch(p.id, { headline }, { headline })}
+              />
+            </span>
+            <span style={{ flexShrink: 0 }}>{category}</span>
           </div>
         </div>
       </div>
@@ -534,6 +666,7 @@ export default function ProjectsWorkspace({
         value={client?.name}
         options={clientOptions}
         placeholder="Set client"
+        {...pickerProps(`${p.id}:client`)}
         onSave={(nextName) => {
           const match = clients.find((c) => c.name === nextName);
           patch(p.id, { clientId: match?.id }, { clientId: match?.id || "" });
@@ -555,31 +688,16 @@ export default function ProjectsWorkspace({
         selected={p.assignedTo}
         options={teamOptions}
         heading="Assign to"
+        {...multiPickProps(`${p.id}:assigned`)}
         searchable
         placeholder="Assign"
         onSave={(assignedTo) => patch(p.id, { assignedTo }, { assignedTo })}
-        renderClosed={(chosen) => <AvatarStack people={chosen} />}
-      />
-    );
-
-    const category = (
-      <MultiPickCell
-        selected={p.category}
-        options={categoryOptions}
-        heading="Category"
-        placeholder="Add"
-        onSave={(cat) => patch(p.id, { category: cat }, { category: cat })}
-        renderClosed={(chosen) => (
-          <span style={{ display: "inline-flex", gap: 5, alignItems: "center", whiteSpace: "nowrap" }}>
-            <span className="type-pill">{chosen[0].label}</span>
-            {chosen.length > 1 && <span className="cell-muted">+{chosen.length - 1}</span>}
-          </span>
-        )}
+        renderClosed={(chosen) => <AvatarStack people={chosen} max={3} />}
       />
     );
 
     const timeline = (
-      <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+      <div className="pw-timeline">
         <DateCell value={p.startDate} placeholder="Start" onSave={(startDate) => patch(p.id, { startDate }, { startDate })} />
         <span style={{ color: "var(--ink-muted)", flexShrink: 0 }}>–</span>
         <DateCell value={p.deadline} placeholder="Deadline" tone={tone} onSave={(deadline) => patch(p.id, { deadline }, { deadline })} />
@@ -591,6 +709,7 @@ export default function ProjectsWorkspace({
       <SelectCell
         value={p.renderPriority}
         options={PRIORITIES}
+        {...pickerProps(`${p.id}:priority`)}
         placeholder="—"
         onSave={(rp) => patch(p.id, { renderPriority: (rp || undefined) as Project["renderPriority"] }, { renderPriority: rp })}
         render={(v) => <span className={`prio ${v.toLowerCase()}`}>{v}</span>}
@@ -601,6 +720,7 @@ export default function ProjectsWorkspace({
       <SelectCell
         value={p.status}
         options={STATUSES}
+        {...pickerProps(`${p.id}:status`)}
         allowEmpty={false}
         onSave={(st) => patch(p.id, { status: st as Project["status"] }, { status: st })}
         render={(v) => <span className={statusBadge[v] ?? "badge pending"}>{v}</span>}
@@ -685,6 +805,7 @@ export default function ProjectsWorkspace({
               selected={p.reviewedBy}
               options={teamOptions}
               heading="Reviewed by"
+              {...multiPickProps(`${p.id}:reviewedBy`)}
               searchable
               placeholder="Who checked it?"
               onSave={(reviewedBy) => patch(p.id, { reviewedBy }, { reviewedBy })}
@@ -709,8 +830,15 @@ export default function ProjectsWorkspace({
           </div>
         </div>
 
+        <ProjectFiles
+          projectId={p.id}
+          files={p.files}
+          companyName={companyById.get(p.companyId)?.name}
+          projectName={p.name}
+        />
+
         <div style={{ display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
-          <EditProjectButton project={p} companies={companies} />
+          <EditProjectButton project={p} companies={companies} clients={clients} team={team} />
           {reviewers.length > 0 && (
             <span style={{ fontSize: 11.5, color: "var(--ink-muted)" }}>
               Last checked by {reviewers.map((r) => r.label).join(", ")}
@@ -732,7 +860,6 @@ export default function ProjectsWorkspace({
           <td className="cell-name">{c.name}</td>
           <td>{c.clientCell}</td>
           <td>{c.assigned}</td>
-          <td>{c.category}</td>
           <td>{c.timeline}</td>
           <td>{c.priority}</td>
           <td>{c.status}</td>
@@ -741,7 +868,7 @@ export default function ProjectsWorkspace({
         </tr>
         {c.open && (
           <tr>
-            <td className="pw-detail-cell" colSpan={9}>
+            <td className="pw-detail-cell" colSpan={8}>
               {c.detail}
             </td>
           </tr>
@@ -769,7 +896,6 @@ export default function ProjectsWorkspace({
         </div>
         <div className="pw-card-row"><span className="k">Client</span><span className="v">{c.clientCell}</span></div>
         <div className="pw-card-row"><span className="k">Timeline</span><span className="v">{c.timeline}</span></div>
-        <div className="pw-card-row"><span className="k">Category</span><span className="v">{c.category}</span></div>
         <div className="pw-card-row"><span className="k">Value</span><span className="v">{c.value}</span></div>
         <div className="pw-card-row"><span className="k">Progress</span><span className="v">{c.progress}</span></div>
         {c.open && c.detail}
@@ -783,12 +909,16 @@ export default function ProjectsWorkspace({
 function BoardView({
   rows,
   companies,
+  clients,
+  team,
   taskStats,
   todayISO,
   onStatus,
 }: {
   rows: Project[];
   companies: Company[];
+  clients: ClientRecord[];
+  team: TeamMember[];
   taskStats: Map<string, { total: number; done: number }>;
   todayISO: string;
   onStatus: (p: Project, status: string) => void;
@@ -805,7 +935,7 @@ function BoardView({
                 <span className={statusBadge[status] ?? "badge pending"}>{status}</span>
                 <span className="count">{list.length}</span>
               </div>
-              <NewProjectButton companies={companies} defaultStatus={status} compact label={`New in ${status}`} />
+              <NewProjectButton companies={companies} clients={clients} team={team} defaultStatus={status} compact label={`New in ${status}`} />
             </div>
             {list.length === 0 ? (
               <div className="board-empty">Nothing here</div>

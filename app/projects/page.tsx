@@ -17,7 +17,12 @@ export const dynamic = "force-dynamic";
 
 export default async function ProjectsPage() {
   const connected = await notionConnected();
-  const companies = connected ? await getCompanies() : [];
+  // getCompanies/getClients/getTeamMembers are request-cached, so fetching them
+  // here as well as inside ProjectsBody costs nothing and lets the header's
+  // New Project form offer a client folder and an assignee.
+  const [companies, clients, team] = connected
+    ? await Promise.all([getCompanies(), getClients(), getTeamMembers()])
+    : [[], [], []];
 
   return (
     <>
@@ -28,7 +33,7 @@ export default async function ProjectsPage() {
         </div>
         {connected && (
           <div className="topbar-actions">
-            <NewProjectButton companies={companies} />
+            <NewProjectButton companies={companies} clients={clients} team={team} />
           </div>
         )}
       </div>
