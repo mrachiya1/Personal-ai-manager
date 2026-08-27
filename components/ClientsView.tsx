@@ -173,6 +173,7 @@ export default function ClientsView({
                       <Link
                         href={`/companies/${company.id}`}
                         onClick={(e) => e.stopPropagation()}
+                        className="inline-link"
                         style={{ color: "inherit" }}
                       >
                         {company.name}
@@ -209,7 +210,7 @@ export default function ClientsView({
                   <span>
                     <span className="company-dot" style={{ background: `var(${selectedCompany?.colorVar ?? "--blue"})` }} />
                     {selectedCompany ? (
-                      <Link href={`/companies/${selectedCompany.id}`} className="link-btn" style={{ padding: 0 }}>
+                      <Link href={`/companies/${selectedCompany.id}`} className="link-btn">
                         {selectedCompany.name}
                       </Link>
                     ) : (

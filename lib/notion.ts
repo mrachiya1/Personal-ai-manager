@@ -36,7 +36,7 @@ import { getDbMap, getNotionToken, DEFAULT_DB } from "./userConfig";
 const NOTION_VERSION = "2022-06-28";
 // Overridable so the app can be pointed at a stand-in Notion during UI work
 // and testing. Unset in every real environment, where it is the live API.
-const BASE_URL = process.env.NOTION_API_BASE_URL || "https://api.notion.com/v1";
+const BASE_URL = process.env["NOTION_API_BASE_URL"] || "https://api.notion.com/v1";
 
 // Database IDs and the API key are resolved per request from the current
 // user's saved configuration, falling back to env. `dbMap()` and `notionKey()`
@@ -590,6 +590,15 @@ export async function getLearningTopics(): Promise<LearningTopic[]> {
     resources: richText(p.properties, "Resources"),
     progress: (select(p.properties, "Progress") as LearningTopic["progress"]) || "Not Started",
     sessionNotes: richText(p.properties, "Session Notes"),
+    // Notion always carries created_time, no property needed — which is what
+    // lets the dashboard show how long a topic has been open without asking
+    // anyone to add a column first.
+    createdTime: p.created_time,
+    // Optional, read if the database happens to have them. A workspace
+    // without these columns reads undefined and falls back to the coarse
+    // status-derived percentage rather than breaking.
+    completion: num(p.properties, "Completion"),
+    targetDate: dateStart(p.properties, "Target Date"),
   }));
 }
 
@@ -627,6 +636,7 @@ export async function getFinanceGoals(): Promise<FinanceGoal[]> {
     linkedCompanyId: relationIds(p.properties, "Linked Company")[0],
     linkedAccountId: relationIds(p.properties, "Linked Account")[0],
     linkedProjectId: relationIds(p.properties, "Linked Project")[0],
+    createdTime: p.created_time,
   }));
 }
 
@@ -783,7 +793,12 @@ export async function getAstroEvents(limit = 10): Promise<AstroEvent[]> {
 
 // ---- writes (quick-capture flows) ----
 
-export async function createIdea(input: { idea: string; description?: string; priority?: string }) {
+export async function createIdea(input: {
+  idea: string;
+  description?: string;
+  priority?: string;
+  tags?: string[];
+}) {
   return notionFetch("/pages", {
     method: "POST",
     body: JSON.stringify({
@@ -794,6 +809,9 @@ export async function createIdea(input: { idea: string; description?: string; pr
           ? { Description: { rich_text: [{ text: { content: input.description } }] } }
           : {}),
         Priority: { select: { name: input.priority || "Later" } },
+        ...(input.tags?.length
+          ? { Tags: { multi_select: input.tags.filter(Boolean).map((name) => ({ name })) } }
+          : {}),
       },
     }),
   });

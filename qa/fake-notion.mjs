@@ -118,8 +118,12 @@ const F = {
     page("id3", { Idea: T("Batch slip scanning for the accountant"), Description: R(""), Tags: M(["Ops"]), "Linked Company": L([]), "Linked Project": L([]), Priority: S("Low") }),
   ],
   learning: [
-    page("ln1", { Topic: T("Houdini pyro"), Description: R("For the Atlas pitch."), Resources: R("Entagma series; SideFX masterclass"), Progress: S("In Progress"), "Session Notes": R("Sparse solver settings still confusing.") }),
+    page("ln1", { Topic: T("Houdini pyro"), Description: R("For the Atlas pitch."), Resources: R("Entagma series; SideFX masterclass"), Progress: S("In Progress"), "Session Notes": R("Sparse solver settings still confusing."), Completion: N(35), "Target Date": D(day(21)) }),
     page("ln2", { Topic: T("Notion API"), Description: R("For the internal tooling."), Resources: R("developers.notion.com"), Progress: S("Completed"), "Session Notes": R("") }),
+    // No Completion column on this one on purpose — it exercises the
+    // fallback where all we honestly know is the status.
+    page("ln3", { Topic: T("Procedural shading"), Description: R("Substance to Karma."), Resources: R(""), Progress: S("In Progress"), "Session Notes": R("") }),
+    page("ln4", { Topic: T("SMC"), Description: R("Smart money concepts."), Resources: R(""), Progress: S("In Progress"), "Session Notes": R(""), Completion: N(72), "Target Date": D(day(-4)) }),
   ],
   dailyLogs: [
     page("dl1", { "Log Date": D(day(-1)), "Mood Score": N(7), "Energy Level": S("High"), Notes: R("Good focus block in the morning. Render queue cleared."), "AI Daily Plan": R("") }),
@@ -192,6 +196,20 @@ http
 
       if (path === "/pages" && req.method === "POST") return send(res, 200, { object: "page", id: "new-" + Date.now() });
       if (/^\/pages\/[^/]+$/.test(path)) return send(res, 200, { object: "page", id: path.split("/").pop() });
+
+      // Stand-in for api.sunrise-sunset.org, so the hora/panchang engine has
+      // real numbers to chew on in QA. Colombo-ish times, held constant so a
+      // screenshot taken today matches one taken next week.
+      if (path === "/json") {
+        const date = (url.searchParams.get("date") || "2026-08-27");
+        return send(res, 200, {
+          status: "OK",
+          results: {
+            sunrise: `${date}T00:37:00+00:00`,
+            sunset: `${date}T12:52:00+00:00`,
+          },
+        });
+      }
 
       send(res, 404, { object: "error", message: `stand-in Notion has no route for ${req.method} ${path}` });
     });

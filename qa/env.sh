@@ -3,6 +3,9 @@
 # data without touching a real Notion workspace.
 export NOTION_API_KEY="ntn_qa_stand_in_key"
 export NOTION_API_BASE_URL="http://localhost:5300"
+# The stand-in also answers /json, so the hora + panchang engines have real
+# sun times to work from without egress to the public sunrise API.
+export SUNRISE_API_BASE="http://localhost:5300"
 export NOTION_COMPANIES_DB="00000000000000000000000000000001"
 export NOTION_CORE_RULES_DB="00000000000000000000000000000002"
 export NOTION_PROJECTS_DB="00000000000000000000000000000003"

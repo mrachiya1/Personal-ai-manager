@@ -55,7 +55,11 @@ async function capture(name, path, { width, height, theme, tag, full = true }) {
       if (!r.width || !r.height) continue;
 
       // Text cut off by its own box.
-      if (el.scrollWidth > el.clientWidth + 2 && cs.overflowX !== "auto" && cs.overflowX !== "scroll") {
+      // text-overflow:ellipsis is a decision, not a defect — a fixed-width
+      // table cell is supposed to elide. Only flag text that is cut with no
+      // affordance at all.
+      if (el.scrollWidth > el.clientWidth + 2 && cs.textOverflow !== "ellipsis"
+          && cs.overflowX !== "auto" && cs.overflowX !== "scroll") {
         const t = (el.textContent || "").trim().slice(0, 40);
         if (t && el.children.length === 0) out.clipped.push(`${el.className || el.tagName} :: ${t}`);
       }
@@ -66,6 +70,14 @@ async function capture(name, path, { width, height, theme, tag, full = true }) {
       }
       // Tap targets below the usual 44px guidance.
       if ((el.tagName === "BUTTON" || el.tagName === "A") && el.children.length <= 1) {
+        // A small button with a negative-inset ::after has a hit area much
+        // bigger than its box. Measure that, not the paint, or every one of
+        // these gets reported forever and the report stops being read.
+        const after = getComputedStyle(el, "::after");
+        const grow = (v) => Math.max(0, -parseFloat(v || "0") || 0);
+        const hitW = r.width + grow(after.left) + grow(after.right);
+        const hitH = r.height + grow(after.top) + grow(after.bottom);
+        if (after.content !== "none" && (hitW >= 28 || hitH >= 28)) continue;
         if (r.height < 28 && r.width < 28 && (el.textContent || "").trim().length + el.querySelectorAll("svg").length > 0) {
           out.touch.push(`${el.tagName}.${el.className} ${Math.round(r.width)}x${Math.round(r.height)}`);
         }

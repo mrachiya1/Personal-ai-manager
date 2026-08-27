@@ -50,11 +50,44 @@ export interface PanchangWindows {
   gulikaKalam: PanchangWindow;
 }
 
-async function fetchSunTimes(dateISO: string): Promise<{ sunrise: string; sunset: string } | null> {
+/**
+ * One day's sun times, memoised for the life of the process.
+ *
+ * The dashboard asks for today's twice (panchang and horas) and tomorrow's
+ * once, and the advisor asks again on every message. Without this, a single
+ * page render makes three identical round trips to a free public API that has
+ * every right to rate-limit us.
+ */
+const sunCache = new Map<string, { sunrise: string; sunset: string } | null>();
+
+export async function fetchSunTimes(dateISO: string): Promise<{ sunrise: string; sunset: string } | null> {
+  const lat0 = settingNumber("homeLat", "HOME_LAT", DEFAULT_LAT);
+  const lon0 = settingNumber("homeLon", "HOME_LON", DEFAULT_LON);
+  const cacheKey = `${dateISO}|${lat0}|${lon0}`;
+  if (sunCache.has(cacheKey)) return sunCache.get(cacheKey)!;
+
+  const result = await fetchSunTimesUncached(dateISO);
+  // A failure is cached too, but only briefly — clearing it on the next tick
+  // means a transient outage doesn't freeze the timing engine until restart.
+  sunCache.set(cacheKey, result);
+  if (!result) setTimeout(() => sunCache.delete(cacheKey), 30_000).unref?.();
+  return result;
+}
+
+async function fetchSunTimesUncached(dateISO: string): Promise<{ sunrise: string; sunset: string } | null> {
   try {
     const lat = settingNumber("homeLat", "HOME_LAT", DEFAULT_LAT);
     const lon = settingNumber("homeLon", "HOME_LON", DEFAULT_LON);
-    const url = `https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lon}&date=${dateISO}&formatted=0`;
+    // Overridable so the QA harness can serve deterministic sun times — the
+    // sandbox this is developed in has no route to the public endpoint, and
+    // "the whole timing engine silently returns null" is not a state worth
+    // shipping untested.
+    // Bracket access on purpose: the bundler statically inlines
+    // `process.env.FOO` at build time, which bakes in whatever the build
+    // machine had (usually nothing) and makes the variable impossible to set
+    // at runtime. Bracket access stays a real lookup.
+    const base = process.env["SUNRISE_API_BASE"] || "https://api.sunrise-sunset.org";
+    const url = `${base}/json?lat=${lat}&lng=${lon}&date=${dateISO}&formatted=0`;
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) return null;
     const data = await res.json();

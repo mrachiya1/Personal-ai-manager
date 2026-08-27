@@ -101,7 +101,7 @@ async function CompaniesBody() {
                 <div style={{ fontSize: 12.5, color: "var(--ink-secondary)", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{company.plan}</div>
               </div>
             )}
-            <Link href={`/companies/${company.id}`} className="link-btn" style={{ padding: 0, fontSize: 12.5 }}>
+            <Link href={`/companies/${company.id}`} className="link-btn">
               View full profile →
             </Link>
           </div>

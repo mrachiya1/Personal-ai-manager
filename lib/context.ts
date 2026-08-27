@@ -6,7 +6,9 @@ import { notionConnected, getCompanies, getCoreRules, getProjects, getTasks, get
 import { buildRuleVars, evaluateRules, timingLabel } from "./rulesEngine";
 import { dateFeatures, lifePathNumber, personalDayNumber } from "./numerology";
 import { getPanchangWindows, activeWindowNow } from "./panchang";
-import { localDateISO } from "./timezone";
+import { getHoraDay, horaAt, HORA_PROFILE } from "./hora";
+import { moonPosition } from "./moon";
+import { formatLocalTime, localDateISO } from "./timezone";
 import { setting } from "./settings";
 
 export async function getTodayContext(dateISO: string = localDateISO()) {
@@ -20,6 +22,11 @@ export async function getTodayContext(dateISO: string = localDateISO()) {
   // from free sunrise/sunset data, see lib/panchang.ts.
   const panchang = await getPanchangWindows(dateISO);
   const activeWindow = activeWindowNow(panchang);
+  // Sun times are memoised, so asking for the horas here costs nothing beyond
+  // the panchang call that already happened.
+  const horaDay = await getHoraDay(dateISO);
+  const currentHora = horaAt(horaDay, new Date());
+  const moon = moonPosition();
 
   if (!(await notionConnected())) {
     return {
@@ -30,6 +37,9 @@ export async function getTodayContext(dateISO: string = localDateISO()) {
       lifePath,
       panchang,
       activeWindow,
+      horaDay,
+      currentHora,
+      moon,
       rules: [],
       timing: { label: "Connect Notion to see today's timing", tone: "neutral" as const },
       companies: [],
@@ -70,6 +80,9 @@ export async function getTodayContext(dateISO: string = localDateISO()) {
     lifePath,
     panchang,
     activeWindow,
+    horaDay,
+    currentHora,
+    moon,
     rules: evaluated,
     timing,
     companies,
@@ -94,7 +107,10 @@ export function summarizeContextForAI(ctx: TodayContext): string {
   lines.push(`Timing verdict: ${ctx.timing.label}.`);
 
   if (ctx.panchang) {
-    const fmt = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    // Local, not server-local: on Vercel the server clock is UTC, and the
+    // advisor quoting Rahu Kalam five and a half hours early is worse than
+    // it not quoting it at all.
+    const fmt = (iso: string) => formatLocalTime(iso);
     lines.push(
       `Today's inauspicious windows (avoid cold outreach, live deploys, contract sign-offs, new company filings — ` +
         `route study/documentation/asset-organization into these instead): ` +
@@ -105,6 +121,26 @@ export function summarizeContextForAI(ctx: TodayContext): string {
     if (ctx.activeWindow) {
       lines.push(`RIGHT NOW is inside ${ctx.activeWindow.name} — actively warn against starting anything high-stakes.`);
     }
+  }
+
+  lines.push(
+    `Moon: ${ctx.moon.rasi} ${ctx.moon.degreeInRasi.toFixed(0)} degrees, nakshatra ${ctx.moon.nakshatra} ` +
+      `(lord ${ctx.moon.nakshatraLord}), ${ctx.moon.phaseName}, ${Math.round(ctx.moon.illumination * 100)}% lit, ` +
+      `${ctx.moon.waxing ? "waxing" : "waning"}. This tilts the day toward ${ctx.moon.favors}.`
+  );
+  if (ctx.currentHora) {
+    lines.push(
+      `Current planetary hora: ${ctx.currentHora.planet} until ${formatLocalTime(ctx.currentHora.end)} — ` +
+        `${HORA_PROFILE[ctx.currentHora.planet].favors}.`
+    );
+  }
+  if (ctx.horaDay) {
+    const upcoming = ctx.horaDay.horas
+      .filter((h) => new Date(h.start).getTime() > Date.now())
+      .slice(0, 4)
+      .map((h) => `${formatLocalTime(h.start)} ${h.planet}`)
+      .join(", ");
+    if (upcoming) lines.push(`Next horas: ${upcoming}.`);
   }
 
   const triggered = ctx.rules.filter((r) => r.triggered);

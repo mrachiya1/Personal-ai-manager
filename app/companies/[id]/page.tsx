@@ -22,7 +22,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
       <div className="topbar">
         <div>
           <div className="eyebrow">
-            <Link href="/companies" className="link-btn" style={{ padding: 0 }}>← Companies</Link>
+            <Link href="/companies" className="link-btn">← Companies</Link>
           </div>
           <h1 className="brand-serif">Company Profile</h1>
         </div>

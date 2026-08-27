@@ -82,7 +82,7 @@ async function RenderQueueBody({
               </td>
               <td>
                 {companyById(p.companyId) ? (
-                  <Link href={`/companies/${p.companyId}`} className="link-btn" style={{ padding: 0 }}>
+                  <Link href={`/companies/${p.companyId}`} className="link-btn">
                     {companyById(p.companyId)?.name}
                   </Link>
                 ) : (

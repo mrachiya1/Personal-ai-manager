@@ -142,6 +142,12 @@ export interface LearningTopic {
   resources?: string;
   progress: LearningProgress;
   sessionNotes?: string;
+  /** Notion's own created_time — always present, no property required. */
+  createdTime?: string;
+  /** Optional "Completion" number column, 0-100, if the database has one. */
+  completion?: number;
+  /** Optional "Target Date" column, if the database has one. */
+  targetDate?: string;
 }
 
 export interface FinanceGoal {
@@ -154,6 +160,8 @@ export interface FinanceGoal {
   linkedCompanyId?: string;
   linkedAccountId?: string;
   linkedProjectId?: string;
+  /** Notion's own created_time, used to show elapsed time against a deadline. */
+  createdTime?: string;
 }
 
 export interface WishlistItem {

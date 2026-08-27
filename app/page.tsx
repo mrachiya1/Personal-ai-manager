@@ -1,74 +1,163 @@
 import { getTodayContext } from "@/lib/context";
-import { getPayments, getClients, getIdeas, getLearningTopics, getFinanceGoals, notionConnected } from "@/lib/notion";
+import {
+  getPayments,
+  getClients,
+  getIdeas,
+  getLearningTopics,
+  getFinanceGoals,
+  getIncome,
+} from "@/lib/notion";
+import { listCalendarEvents } from "@/lib/googleCalendar";
+import { HORA_PROFILE } from "@/lib/hora";
+import { computeDayEnergy, sinhalaGreeting } from "@/lib/dayEnergy";
+import { cashFlow, executionLoad, revenuePulse, visionLine } from "@/lib/dashboard";
+import { formatLocalTime, localDateISO, localHour, tzOffset } from "@/lib/timezone";
 import ConnectPrompt from "@/components/ConnectPrompt";
-import IdeaCapture from "@/components/IdeaCapture";
 import DayPlanCard from "@/components/DayPlanCard";
-import { localDateISO } from "@/lib/timezone";
+import ExecutiveSummary from "@/components/today/ExecutiveSummary";
+import MetricRow from "@/components/today/MetricRow";
+import DayPlanColumn, { type PlanSlot, type PlanTask } from "@/components/today/DayPlanColumn";
+import GrowthHub from "@/components/today/GrowthHub";
 import { currentUser } from "@/auth";
 
-const priorityBadgeClass: Record<string, string> = { High: "badge high", Medium: "badge med", Low: "badge low" };
-const paymentBadgeClass: Record<string, string> = {
-  Overdue: "badge overdue",
-  Pending: "badge pending",
-  "Partially Paid": "badge pending",
-  Paid: "badge paid",
-};
+/**
+ * What to call the whole operation, read off the workspace rather than
+ * written into the code — this page is served to whoever signs in, and their
+ * company is not the same as anyone else's.
+ *
+ * Companies named "Orex", "Orex Studio" and "Orex Labs" are one group with a
+ * shared name, so the greeting says "Orex Group" rather than listing three.
+ * With no common stem it falls back to the first company, which is at least
+ * true.
+ */
+function groupName(names: string[]): string {
+  if (names.length === 0) return "your workspace";
+  if (names.length === 1) return names[0];
 
-function formatMoney(n: number) {
-  return `$${n.toLocaleString()}`;
+  const firstWords = names.map((n) => n.trim().split(/\s+/)[0]);
+  const stem = firstWords[0];
+  if (stem && firstWords.every((w) => w.toLowerCase() === stem.toLowerCase())) {
+    return `${stem} Group`;
+  }
+  return names[0];
 }
 
-const toneCopy = {
-  good: { pill: "GOOD DAY", big: "Favorable for deep work", bg: "rgba(12,163,12,0.05)" },
-  warning: { pill: "USE CAUTION", big: "Slow down on big moves today", bg: "rgba(250,178,25,0.08)" },
-  neutral: { pill: "NEUTRAL DAY", big: "No strong signal either way", bg: "rgba(11,11,11,0.02)" },
-};
-
 export default async function TodayPage() {
-  const ctx = await getTodayContext();
-  const tone = toneCopy[ctx.timing.tone];
+  const todayISO = localDateISO();
+  const ctx = await getTodayContext(todayISO);
 
-  const [payments, clients, ideas, learningTopics, financeGoals] = ctx.connected
-    ? await Promise.all([getPayments(), getClients(), getIdeas(), getLearningTopics(), getFinanceGoals()])
-    : [[], [], [], [], []];
+  const [payments, clients, ideas, learningTopics, financeGoals, income] = ctx.connected
+    ? await Promise.all([getPayments(), getClients(), getIdeas(), getLearningTopics(), getFinanceGoals(), getIncome()])
+    : [[], [], [], [], [], []];
 
-  const renderQueue = ctx.connected
-    ? ctx.projects.filter((p) => p.status === "Rendering-Ready").sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""))
-    : [];
-  const overdue = payments.filter((p) => p.status === "Overdue");
+  // Calendar is optional and lives behind a service account that may not be
+  // configured; it returns [] rather than throwing, so it can't take the
+  // dashboard down.
+  const events = ctx.connected ? await listCalendarEvents(todayISO) : [];
 
-  const in3Days = new Date(localDateISO() + "T00:00:00");
-  in3Days.setDate(in3Days.getDate() + 3);
-  const upcomingDeadlines = ctx.connected
-    ? ctx.projects.filter((p) => p.status !== "Delivered" && p.deadline && p.deadline >= localDateISO() && p.deadline <= in3Days.toISOString().slice(0, 10))
-    : [];
-  const notifications = ctx.connected
-    ? [
-        ...(overdue.length ? [{ text: `${overdue.length} overdue payment${overdue.length === 1 ? "" : "s"}`, tone: "critical" as const }] : []),
-        ...(ctx.tasksDueToday.length ? [{ text: `${ctx.tasksDueToday.length} task${ctx.tasksDueToday.length === 1 ? "" : "s"} due today`, tone: "warn" as const }] : []),
-        ...(upcomingDeadlines.length ? [{ text: `${upcomingDeadlines.length} project deadline${upcomingDeadlines.length === 1 ? "" : "s"} in the next 3 days`, tone: "warn" as const }] : []),
-        ...(renderQueue.length ? [{ text: `${renderQueue.length} project${renderQueue.length === 1 ? "" : "s"} queued to render`, tone: "info" as const }] : []),
-      ]
-    : [];
-  const clientById = (id: string) => clients.find((c) => c.id === id);
-  const activeProjects = ctx.connected ? ctx.projects.filter((p) => p.status !== "Delivered") : [];
-  const triggered = ctx.rules.filter((r) => r.triggered);
+  const energy = computeDayEnergy({ horaDay: ctx.horaDay, panchang: ctx.panchang, personalDay: ctx.personalDay });
 
-  const today = new Date(ctx.dateISO + "T00:00:00");
-  const dateLabel = today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const pulse = revenuePulse({ payments, income, companies: ctx.companies, todayISO });
+  const load = executionLoad({ projects: ctx.projects, tasks: ctx.tasks, todayISO });
+  const cash = cashFlow({ payments, clients, events, panchang: ctx.panchang, todayISO });
 
-  // Greet whoever is actually signed in. In single-user local mode there is no
-  // account, so it stays a plain greeting rather than naming anyone.
+  /* ---------- left column: the day on a clock ---------- */
+  const slots: PlanSlot[] = [];
+  if (energy.deepWork) {
+    slots.push({
+      start: energy.deepWork.start,
+      end: energy.deepWork.end,
+      title: `Deep work — ${energy.deepWork.label}`,
+      kind: "deep",
+      note: energy.deepWork.planets.map((p) => HORA_PROFILE[p as keyof typeof HORA_PROFILE].quality).join(" then "),
+    });
+  }
+  if (ctx.panchang) {
+    slots.push(
+      { start: ctx.panchang.rahuKalam.start, end: ctx.panchang.rahuKalam.end, title: "Rahu Kalam", kind: "blocked", note: "No launches, sign-offs, cold outreach or live deploys" },
+      { start: ctx.panchang.yamagandam.start, end: ctx.panchang.yamagandam.end, title: "Yamagandam", kind: "blocked", note: "Route study and asset work here" },
+    );
+  }
+  if (energy.rest) {
+    slots.push({ start: energy.rest.start, end: energy.rest.end, title: "Reset & recharge", kind: "rest", note: energy.rest.label });
+  }
+  slots.sort((a, b) => a.start.localeCompare(b.start));
+
+  /* ---------- left column: what ships, and what that buys ---------- */
+  const projectById = new Map(ctx.projects.map((p) => [p.id, p]));
+  const planTasks: PlanTask[] = [
+    ...load.dueToday.map((t) => {
+      const project = projectById.get(t.projectId);
+      return {
+        id: t.id,
+        title: t.title,
+        done: t.status === "Done",
+        projectName: project?.name,
+        vision: project
+          ? visionLine(project, clients, ctx.companies, pulse.currency)
+          : "Not linked to a project — link it in Notion so its value shows here.",
+        milestone: project?.deadline
+          ? project.deadline < todayISO
+            ? ("late" as const)
+            : project.deadline === todayISO
+              ? ("today" as const)
+              : ("week" as const)
+          : null,
+        due: project?.deadline,
+      };
+    }),
+    // Projects whose own deadline is today but that carry no task — they'd
+    // otherwise be invisible on the one day they matter most.
+    ...load.shippingToday
+      .filter((p) => !load.dueToday.some((t) => t.projectId === p.id))
+      .map((p) => ({
+        id: `project:${p.id}`,
+        title: p.name,
+        done: false,
+        projectName: undefined,
+        vision: visionLine(p, clients, ctx.companies, pulse.currency),
+        milestone: "today" as const,
+        due: p.deadline,
+      })),
+  ];
+
+  /* ---------- header ---------- */
   const user = await currentUser();
   const firstName = (user?.name || user?.email?.split("@")[0] || "").split(/\s+/)[0];
-  const greeting = firstName ? `Good morning, ${firstName}` : "Good morning";
+  const greeting = sinhalaGreeting(localHour());
+  const today = new Date(`${ctx.dateISO}T12:00:00Z`);
+  const dateLabel = today.toLocaleDateString("en-US", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  const triggered = ctx.rules.filter((r) => r.triggered);
+
+  const orgLabel = `CEO of ${groupName(ctx.companies.map((c) => c.name))}`;
 
   return (
     <>
-      <div className="topbar">
-        <div>
-          <div className="date">{dateLabel}</div>
-          <h1 className="brand-serif">{greeting}</h1>
+      <div className="topbar today-bar">
+        <div className="greet">
+          <div className="greet-meta">
+            <span className="greet-date">{dateLabel}</span>
+            <span className={`greet-pill ${greeting.band.toLowerCase()}`}>
+              <span className="status-dot" />
+              {greeting.band} · {greeting.gloss}
+            </span>
+          </div>
+          <h1 className="greet-line">
+            {greeting.sinhala}
+            {firstName ? `, ${firstName}` : ""}
+            <span className="greet-role"> — CEO</span>
+          </h1>
+          <div className="greet-sub">
+            {energy.moon.rasi} Moon · {energy.moon.nakshatra}
+            {energy.currentHora ? ` · ${energy.currentHora.planet} hora until ${formatLocalTime(energy.currentHora.end)}` : ""}
+            {ctx.personalDay !== null ? ` · Personal Day ${ctx.personalDay}` : ""}
+          </div>
         </div>
         <div className="topbar-actions">
           <a href="/advisor" className="btn-primary">
@@ -81,282 +170,36 @@ export default async function TodayPage() {
       </div>
 
       {ctx.activeWindow && (
-        <section
-          className="card"
-          style={{
-            marginBottom: 16,
-            padding: "12px 16px",
-            background: "rgba(161,36,36,0.06)",
-            border: "1px solid rgba(161,36,36,0.25)",
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          <span style={{ fontSize: 18 }}>⛔</span>
-          <div style={{ fontSize: 13.5 }}>
-            <strong>{ctx.activeWindow.name} is active</strong> until{" "}
-            {new Date(ctx.activeWindow.window.end).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-            {" — "}hold off on launches, contract sign-offs, cold outreach, and live deploys. Good window for
-            study, documentation, or organizing assets instead.
+        <section className="card window-alert">
+          <span className="wa-dot" aria-hidden />
+          <div>
+            <strong>{ctx.activeWindow.name} is running</strong> until {formatLocalTime(ctx.activeWindow.window.end)} — hold
+            launches, contract sign-offs, cold outreach and live deploys. Put study, documentation or asset organisation
+            here instead.
           </div>
         </section>
       )}
 
-      {ctx.panchang && !ctx.activeWindow && (
-        <section
-          className="card"
-          style={{ marginBottom: 16, padding: "10px 16px", display: "flex", gap: 18, flexWrap: "wrap", fontSize: 12.5, color: "var(--ink-muted)" }}
-        >
-          <span>
-            Rahu Kalam {new Date(ctx.panchang.rahuKalam.start).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}–
-            {new Date(ctx.panchang.rahuKalam.end).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-          </span>
-          <span>
-            Yamagandam {new Date(ctx.panchang.yamagandam.start).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}–
-            {new Date(ctx.panchang.yamagandam.end).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-          </span>
-          <span>
-            Gulika Kalam {new Date(ctx.panchang.gulikaKalam.start).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}–
-            {new Date(ctx.panchang.gulikaKalam.end).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-          </span>
-        </section>
-      )}
-
-      {/* Timing hero */}
-      <section className="card hero">
-        <div className="hero-status" style={{ background: `linear-gradient(180deg, ${tone.bg}, transparent)` }}>
-          <span className="status-pill">
-            <span className="status-dot" />
-            {tone.pill}
-          </span>
-          <div className="big">{tone.big}</div>
-          <div className="sub">
-            {ctx.personalDay !== null ? `Personal Day ${ctx.personalDay} · ` : ""}
-            {ctx.features.dayOfMonthOdd ? "Odd" : "Even"} calendar day
-          </div>
-        </div>
-        <div className="hero-body">
-          <div className="label">Today&rsquo;s Reasoning</div>
-          {triggered.length > 0 ? (
-            <div className="chip-row" style={{ marginBottom: 4 }}>
-              {triggered.map((r) => (
-                <span className="chip" key={r.id}>
-                  <span className="dot" style={{ background: "var(--violet)" }} />
-                  {r.rule}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p>
-              {ctx.personalDay === null
-                ? 'Set BIRTH_DATE in .env.local to unlock numerology-based reasoning here.'
-                : "No rules triggered today by your current Core Rules — add more in Notion for finer-grained guidance."}
-            </p>
-          )}
-          {triggered.length > 0 && (
-            <p>
-              {triggered.map((r) => r.guidance).join(" ")}
-            </p>
-          )}
-        </div>
-      </section>
+      <ExecutiveSummary energy={energy} name={firstName} org={orgLabel} triggered={triggered} />
 
       {!ctx.connected && <ConnectPrompt />}
 
-      {ctx.connected && notifications.length > 0 && (
-        <section className="card" style={{ marginBottom: 16, padding: "10px 16px" }}>
-          <div style={{ fontSize: 10.5, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
-            🔔 Notifications
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {notifications.map((n, i) => (
-              <span
-                key={i}
-                className={n.tone === "critical" ? "badge overdue" : n.tone === "warn" ? "badge med" : "badge pending"}
-              >
-                {n.text}
-              </span>
-            ))}
-          </div>
-        </section>
-      )}
-
       {ctx.connected && (
         <>
-          {/* Stat tiles */}
-          <section className="stat-grid">
-            <div className="card stat-tile">
-              <span className="stat-label">Active Projects</span>
-              <div className="stat-value">{activeProjects.length}</div>
-              <div className="stat-delta flat">Across {ctx.companies.length} companies</div>
-            </div>
-            <div className="card stat-tile">
-              <span className="stat-label">Tasks Due Today</span>
-              <div className="stat-value">{ctx.tasksDueToday.length}</div>
-              <div className="stat-delta flat">From Notion Tasks</div>
-            </div>
-            <div className="card stat-tile">
-              <span className="stat-label">Overdue Payments</span>
-              <div className="stat-value">{overdue.length}</div>
-              <div className="stat-delta down">
-                {overdue[0] ? `${formatMoney(overdue[0].amount)}${overdue[0].dueDate ? ` · due ${overdue[0].dueDate}` : ""}` : "None"}
-              </div>
-            </div>
-            <div className="card stat-tile">
-              <span className="stat-label">Recent Energy</span>
-              <div className="stat-value">{ctx.recentLogs[0]?.energyLevel ?? "—"}</div>
-              <div className="stat-delta flat">
-                {ctx.recentLogs.length ? `From ${ctx.recentLogs[0].date}` : "Log a daily entry to populate this"}
-              </div>
-            </div>
-          </section>
+          <MetricRow
+            pulse={pulse}
+            load={load}
+            cash={cash}
+            energy={energy}
+            energyLevel={ctx.recentLogs[0]?.energyLevel}
+          />
 
-          <section className="grid-2">
-            <div className="card section-card">
-              <h2>Today&rsquo;s Plan</h2>
-              <div className="section-sub">Generated from your Core Rules + numerology</div>
-              {triggered.length === 0 && (
-                <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>
-                  No specific do/avoid guidance triggered today. Add more Core Rules in Notion to sharpen this.
-                </div>
-              )}
-              {triggered.map((r) => (
-                <div className="plan-item" key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  <div className={`plan-icon ${r.guidance.toLowerCase().includes("avoid") ? "warn" : "good"}`}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
-                  </div>
-                  <div className="plan-text">
-                    <div className="title">{r.rule}</div>
-                    <div className="reason">{r.guidance}</div>
-                  </div>
-                </div>
-              ))}
+          <section className="today-split">
+            <div className="split-col">
+              <DayPlanColumn slots={slots} tasks={planTasks} meetings={cash.meetings} tzOffset={tzOffset()} />
+              <DayPlanCard />
             </div>
-
-            <div className="side-stack">
-              <div className="card section-card">
-                <h2>Render Queue</h2>
-                <div className="section-sub">Rendering-ready, by priority</div>
-                <table className="mini">
-                  <tbody>
-                    <tr>
-                      <th>Project</th>
-                      <th>Priority</th>
-                      <th>Due</th>
-                    </tr>
-                    {renderQueue.length === 0 && (
-                      <tr>
-                        <td colSpan={3} style={{ color: "var(--ink-muted)" }}>Nothing rendering-ready right now.</td>
-                      </tr>
-                    )}
-                    {renderQueue.map((p) => (
-                      <tr key={p.id}>
-                        <td>
-                          <div className="proj-name">{p.name}</div>
-                        </td>
-                        <td>
-                          <span className={priorityBadgeClass[p.renderPriority ?? "Low"]}>{p.renderPriority ?? "—"}</span>
-                        </td>
-                        <td>{p.deadline ?? "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="card section-card">
-                <h2>Payments</h2>
-                <div className="section-sub">Overdue &amp; upcoming</div>
-                <table className="mini">
-                  <tbody>
-                    <tr>
-                      <th>Client</th>
-                      <th>Amount</th>
-                      <th>Status</th>
-                    </tr>
-                    {payments.filter((p) => p.status !== "Paid").length === 0 && (
-                      <tr>
-                        <td colSpan={3} style={{ color: "var(--ink-muted)" }}>Nothing outstanding.</td>
-                      </tr>
-                    )}
-                    {payments
-                      .filter((p) => p.status !== "Paid")
-                      .map((p) => (
-                        <tr key={p.id}>
-                          <td>{clientById(p.clientId)?.name ?? "—"}</td>
-                          <td>{formatMoney(p.amount)}</td>
-                          <td>
-                            <span className={paymentBadgeClass[p.status]}>
-                              {p.status === "Pending" && p.dueDate ? `Due ${p.dueDate}` : p.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-
-          <section className="grid-3">
-            <div className="card section-card">
-              <h2>Ideas Inbox</h2>
-              <div className="section-sub">Quick capture — writes to Notion</div>
-              <IdeaCapture />
-              <div>
-                {ideas.slice(0, 6).map((idea) => (
-                  <span className="idea-tag" key={idea.id}>{idea.idea}</span>
-                ))}
-              </div>
-            </div>
-
-            <div className="card section-card">
-              <h2>Learning</h2>
-              <div className="section-sub">In progress</div>
-              {learningTopics.filter((t) => t.progress === "In Progress").length === 0 && (
-                <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>Nothing in progress — add a topic in Notion.</div>
-              )}
-              {learningTopics
-                .filter((t) => t.progress === "In Progress")
-                .slice(0, 2)
-                .map((topic) => (
-                  <div className="learn-topic" key={topic.id}>
-                    <div className="learn-swatch">✦</div>
-                    <div>
-                      <div className="title">{topic.topic}</div>
-                      <div className="meta">{topic.sessionNotes || "In progress"}</div>
-                    </div>
-                  </div>
-                ))}
-            </div>
-
-            <div className="card section-card">
-              <h2>Finance Goals</h2>
-              <div className="section-sub">Progress toward targets</div>
-              {financeGoals.length === 0 && (
-                <div style={{ color: "var(--ink-muted)", fontSize: 13 }}>No goals yet — add one in Notion.</div>
-              )}
-              {financeGoals.map((goal) => (
-                <div className="goal-row" key={goal.id}>
-                  <div className="goal-top">
-                    <span className="name">{goal.goal}</span>
-                    <span className="amt">
-                      {formatMoney(goal.currentAmount)} / {formatMoney(goal.targetAmount)}
-                    </span>
-                  </div>
-                  <div className="track">
-                    <div style={{ width: `${Math.min(100, Math.round((goal.currentAmount / (goal.targetAmount || 1)) * 100))}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section style={{ marginBottom: 16 }}>
-            <DayPlanCard />
+            <GrowthHub goals={financeGoals} learning={learningTopics} ideas={ideas} todayISO={todayISO} />
           </section>
         </>
       )}

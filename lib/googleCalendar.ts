@@ -123,3 +123,62 @@ export async function createCalendarEvent(input: {
     return { ok: false, error: err?.message || "Calendar sync failed" };
   }
 }
+
+export interface CalendarEvent {
+  id: string;
+  summary: string;
+  /** ISO datetime, or the date itself for an all-day event. */
+  start: string;
+  end: string;
+  allDay: boolean;
+  location?: string;
+  attendees: number;
+  htmlLink?: string;
+}
+
+/**
+ * Today's events, oldest first.
+ *
+ * Returns an empty list — never throws — when Calendar isn't configured or
+ * the call fails, because a broken integration must not take the dashboard
+ * down with it. Untested against live credentials from this environment for
+ * the same reason as the rest of this file.
+ */
+export async function listCalendarEvents(dateISO: string, tzOffsetHours = 5.5): Promise<CalendarEvent[]> {
+  if (!isGoogleCalendarConnected()) return [];
+  const token = await getAccessToken();
+  if (!token) return [];
+  const { calendarId } = googleConfig();
+
+  // The local day, expressed as the UTC instants that bound it.
+  const dayStart = new Date(`${dateISO}T00:00:00Z`).getTime() - tzOffsetHours * 3600_000;
+  const dayEnd = dayStart + 86400_000;
+
+  try {
+    const params = new URLSearchParams({
+      timeMin: new Date(dayStart).toISOString(),
+      timeMax: new Date(dayEnd).toISOString(),
+      singleEvents: "true",
+      orderBy: "startTime",
+      maxResults: "25",
+    });
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId!)}/events?${params}`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.items || []).map((e: any) => ({
+      id: e.id,
+      summary: e.summary || "(no title)",
+      start: e.start?.dateTime || e.start?.date || "",
+      end: e.end?.dateTime || e.end?.date || "",
+      allDay: !e.start?.dateTime,
+      location: e.location,
+      attendees: Array.isArray(e.attendees) ? e.attendees.length : 0,
+      htmlLink: e.htmlLink,
+    }));
+  } catch {
+    return [];
+  }
+}

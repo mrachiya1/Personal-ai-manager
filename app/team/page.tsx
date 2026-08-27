@@ -58,7 +58,7 @@ async function TeamBody({ companies }: { companies: Awaited<ReturnType<typeof ge
               <td>{m.role || "—"}</td>
               <td>
                 {companyById(m.companyId) ? (
-                  <Link href={`/companies/${m.companyId}`} className="link-btn" style={{ padding: 0 }}>
+                  <Link href={`/companies/${m.companyId}`} className="link-btn">
                     {companyById(m.companyId)?.name}
                   </Link>
                 ) : (

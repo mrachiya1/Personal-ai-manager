@@ -86,7 +86,7 @@ async function PaymentsBody({
                   {client?.name ?? "—"}
                   {company && (
                     <div className="proj-client">
-                      <Link href={`/companies/${company.id}`} className="link-btn" style={{ padding: 0, fontSize: 11 }}>
+                      <Link href={`/companies/${company.id}`} className="link-btn" style={{ fontSize: 11 }}>
                         {company.name}
                       </Link>
                     </div>
