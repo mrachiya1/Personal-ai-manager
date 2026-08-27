@@ -624,6 +624,22 @@ export async function createLearningTopic(input: {
   });
 }
 
+export async function updateLearningTopic(
+  id: string,
+  input: { progress?: string; completion?: number; sessionNotes?: string; targetDate?: string }
+) {
+  const properties: Record<string, unknown> = {};
+  if (input.progress !== undefined) properties.Progress = { select: { name: input.progress } };
+  if (input.completion !== undefined) properties.Completion = { number: input.completion };
+  if (input.sessionNotes !== undefined) {
+    properties["Session Notes"] = { rich_text: input.sessionNotes ? [{ text: { content: input.sessionNotes } }] : [] };
+  }
+  if (input.targetDate !== undefined) {
+    properties["Target Date"] = { date: input.targetDate ? { start: input.targetDate } : null };
+  }
+  return notionFetch(`/pages/${id}`, { method: "PATCH", body: JSON.stringify({ properties }) });
+}
+
 export async function getFinanceGoals(): Promise<FinanceGoal[]> {
   const pages = await queryAll((await dbMap()).financeGoals);
   return pages.map((p) => ({

@@ -209,29 +209,142 @@ export function computeDayEnergy(input: {
   return { score, verdict, headline, reasons, deepWork, rest, currentHora, moon };
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Windows the rest of the dashboard plans against                     */
+/* ------------------------------------------------------------------ */
+
+export interface FocusWindow {
+  start: string;
+  end: string;
+  planet: string;
+  /** 0-1, after penalties for blocked windows and the afternoon dip. */
+  focus: number;
+}
+
+/**
+ * Daylight horas ranked by how much focused work they can carry.
+ *
+ * Exported because two different things need the same ranking and must not
+ * disagree: the capacity figure on the metric card, and the slots the
+ * schedule drops tasks into. One function, one answer.
+ */
+export function focusWindows(horaDay: HoraDay | null, panchang: PanchangWindows | null): FocusWindow[] {
+  if (!horaDay) return [];
+  return horaDay.horas
+    .filter((h) => h.daytime)
+    .map((h) => ({ start: h.start, end: h.end, planet: h.planet, focus: focusValue(h, panchang) }));
+}
+
+/** Hours of daylight left today that are actually worth working in. */
+export function focusHoursRemaining(windows: FocusWindow[], now: Date = new Date()): number {
+  const nowMs = now.getTime();
+  let ms = 0;
+  for (const w of windows) {
+    // Below 0.5 the hora is a grind hour, not a deep-work hour — counting it
+    // would inflate the capacity figure into a promise the day can't keep.
+    if (w.focus < 0.5) continue;
+    const start = Math.max(new Date(w.start).getTime(), nowMs);
+    const end = new Date(w.end).getTime();
+    if (end > start) ms += end - start;
+  }
+  return ms / 3600_000;
+}
+
 /* ------------------------------------------------------------------ */
 /* Greeting                                                            */
 /* ------------------------------------------------------------------ */
 
 export interface Greeting {
-  /** The Sinhala greeting itself. */
+  /** The full line, Sinhala opener through to the title. */
+  line: string;
+  /** The Sinhala opener on its own. */
   sinhala: string;
-  /** What part of the day it belongs to, for the pill. */
   band: "Morning" | "Afternoon" | "Evening";
-  /** The English gloss, small, under the greeting. */
   gloss: string;
+  /** The synthesised one-liner under it — season, sky, numbers, rest. */
+  vibe: string;
 }
 
 /**
- * Sinhala greeting by the hour, in the user's own timezone.
+ * Sinhala opener for the hour.
  *
  * The evening band deliberately runs to 4am rather than midnight: late-night
- * deep work is the same working session, and being told "good morning" at
- * 2am while still rendering is the kind of small wrongness that makes a
+ * deep work is the same working session, and being told "good morning" at 2am
+ * while a render is going is the kind of small wrongness that makes a
  * dashboard feel like it isn't paying attention.
  */
-export function sinhalaGreeting(hour: number): Greeting {
+export function sinhalaGreeting(hour: number): { sinhala: string; band: Greeting["band"]; gloss: string } {
   if (hour >= 4 && hour < 12) return { sinhala: "Subha Udesanak", band: "Morning", gloss: "Good morning" };
   if (hour >= 12 && hour < 17) return { sinhala: "Subha Dawasak", band: "Afternoon", gloss: "Good day" };
   return { sinhala: "Ayubowan", band: "Evening", gloss: hour < 4 ? "Late-night deep work" : "Good evening" };
+}
+
+/** Sri Lanka's actual seasons, which are monsoons rather than temperatures. */
+function seasonNote(month: number): string {
+  if (month >= 5 && month <= 9) return "mid-Yala, the southwest monsoon — long indoor working days";
+  if (month === 12 || month <= 2) return "Maha season — the year's planning half";
+  if (month === 3 || month === 4) return "first inter-monsoon, the year's turn — new-cycle energy";
+  return "second inter-monsoon — closing-out weather";
+}
+
+/**
+ * The greeting line and the line under it.
+ *
+ * Nothing here is a fixed wish. The opener shifts with the clock and rises to
+ * the Poya form on a full moon, which in Sri Lanka is the actual name of the
+ * day rather than a flourish. The line underneath is assembled fresh from the
+ * season, the Moon, the hora running now, the personal day number and last
+ * night's sleep — so on two different days it says two different things,
+ * because two different things are true.
+ */
+export function buildGreeting(input: {
+  hour: number;
+  month: number;
+  energy: DayEnergy;
+  personalDay: number | null;
+  sleepHours?: number;
+  name?: string;
+  title?: string;
+}): Greeting {
+  const base = sinhalaGreeting(input.hour);
+  const { moon, currentHora, score } = input.energy;
+
+  // Poya is the full-moon day itself — worth naming on the one day a month it
+  // is true, and wrong on the other twenty-nine.
+  const poya = moon.illumination > 0.97;
+  const sinhala = poya && input.hour >= 4 && input.hour < 17 ? "Subha Poya Dinayak" : base.sinhala;
+
+  const parts: string[] = [seasonNote(input.month)];
+  parts.push(
+    `${moon.waxing ? "waxing" : "waning"} ${moon.rasi} Moon at ${Math.round(moon.illumination * 100)}%`
+  );
+  if (currentHora) parts.push(`${currentHora.planet} hora running`);
+  if (input.personalDay !== null) {
+    parts.push(
+      [11, 22, 33].includes(input.personalDay)
+        ? `master Personal Day ${input.personalDay}`
+        : `Personal Day ${input.personalDay}`
+    );
+  }
+  if (input.sleepHours !== undefined) parts.push(`${input.sleepHours.toFixed(1)}h rest behind you`);
+
+  const verdict =
+    score >= 70
+      ? "The day is set up to carry weight — spend it on the work that compounds."
+      : score >= 50
+        ? "Steady conditions. Finish what is open before opening anything new."
+        : "Thin conditions for big moves. Bank the small wins and protect the pipeline.";
+
+  const parted = parts.join(" · ");
+  const name = input.name ? ` ${input.name}` : "";
+  const title = input.title ? ` ${input.title}` : "";
+
+  return {
+    line: `${sinhala}${name}${title}`,
+    sinhala,
+    band: base.band,
+    gloss: poya ? "Full moon — Poya day" : base.gloss,
+    vibe: `${parted}. ${verdict}`,
+  };
 }

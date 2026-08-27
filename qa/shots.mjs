@@ -106,9 +106,13 @@ async function capture(name, path, { width, height, theme, tag, full = true }) {
 for (const [name, path] of PAGES) {
   await capture(name, path, { width: 1440, height: 900, theme: "light", tag: "desk" });
 }
-// Dark and mobile on the screens that carry the most layout.
-for (const [name, path] of PAGES.filter(([n]) => ["today", "projects", "finance", "clients", "settings", "payments"].includes(n))) {
+// The dark palette is shared by every screen, so every screen gets checked in
+// it — a token change that only looks right on the six pages you remembered
+// to test is the same as not having tested it.
+for (const [name, path] of PAGES) {
   await capture(name, path, { width: 1440, height: 900, theme: "dark", tag: "dark" });
+}
+for (const [name, path] of PAGES.filter(([n]) => ["today", "projects", "finance", "clients", "settings", "payments"].includes(n))) {
   await capture(name, path, { width: 390, height: 844, theme: "light", tag: "mob" });
 }
 

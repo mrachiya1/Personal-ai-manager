@@ -16,7 +16,7 @@ async function shot(tag, { width, height, theme }) {
   const audit = await p.evaluate(() => {
     const out = { hOverflow: false, clipped: [], tiny: [], touch: [], missing: [] };
     out.hOverflow = document.documentElement.scrollWidth > document.documentElement.clientWidth + 1;
-    for (const sel of [".greet-line", ".exec-card", ".metric-row .metric-card", ".today-split", ".tl-row", ".vt", ".hub-tab", ".dual-row"]) {
+    for (const sel of [".th-greeting", ".live-clock", ".good-banner", ".synth-vibe", ".synth-reasoning", ".synth-overall", ".transit-strip .ts-item", ".metric-grid .metric-card", ".rest-banner", ".today-split", ".plan-row", ".goal-row", ".learn-row", ".qa-tab", ".qa-input"]) {
       if (!document.querySelector(sel)) out.missing.push(sel);
     }
     for (const el of document.querySelectorAll("body *")) {
@@ -69,5 +69,7 @@ await shot("desk", { width: 1440, height: 950, theme: "light" });
 await shot("dark", { width: 1440, height: 950, theme: "dark" });
 await shot("mob", { width: 390, height: 844, theme: "light" });
 await shot("mid", { width: 1024, height: 900, theme: "light" });
+await shot("wide", { width: 1680, height: 1000, theme: "dark" });
+await shot("tab", { width: 780, height: 1000, theme: "dark" });
 await b.close();
 console.log(problems.join("\n"));
