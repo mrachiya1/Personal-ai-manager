@@ -77,7 +77,7 @@ export function PreferencesCard({
             style={{
               fontSize: 12.5, borderRadius: 9, padding: "9px 11px", marginBottom: 12,
               background: msg.kind === "ok" ? "var(--good-bg)" : "var(--critical-bg)",
-              color: msg.kind === "ok" ? "#0a6b0a" : "#a12424",
+              color: msg.kind === "ok" ? "var(--good-ink)" : "var(--critical-ink)",
             }}
           >
             {msg.text}

@@ -20,9 +20,9 @@ interface Check {
 function Banner({ kind, children }: { kind: "ok" | "err" | "info"; children: React.ReactNode }) {
   const tone =
     kind === "ok"
-      ? { bg: "var(--good-bg)", fg: "#0a6b0a", br: "rgba(12,163,12,0.25)" }
+      ? { bg: "var(--good-bg)", fg: "var(--good-ink)", br: "rgba(12,163,12,0.25)" }
       : kind === "err"
-        ? { bg: "var(--critical-bg)", fg: "#a12424", br: "rgba(208,59,59,0.25)" }
+        ? { bg: "var(--critical-bg)", fg: "var(--critical-ink)", br: "rgba(208,59,59,0.25)" }
         : { bg: "var(--rail)", fg: "var(--ink-secondary)", br: "var(--border)" };
   return (
     <div
@@ -292,9 +292,9 @@ export function DatabaseMappingCard({ rows }: { rows: DbRow[] }) {
                 <div style={{ width: 190, flexShrink: 0, fontSize: 11 }}>
                   {check ? (
                     check.ok ? (
-                      <span style={{ color: "#0a6b0a", fontWeight: 600 }}>✓ {check.title || "reachable"}</span>
+                      <span style={{ color: "var(--good-ink)", fontWeight: 600 }}>✓ {check.title || "reachable"}</span>
                     ) : (
-                      <span style={{ color: "#a12424", fontWeight: 600 }}>✕ {check.reason}</span>
+                      <span style={{ color: "var(--critical-ink)", fontWeight: 600 }}>✕ {check.reason}</span>
                     )
                   ) : (
                     <span className="cell-muted">{r.overridden ? "custom" : "default"}</span>
@@ -382,7 +382,7 @@ export function AccountDataCard({ authEnabled }: { authEnabled: boolean }) {
               className="btn-ghost"
               style={{
                 borderColor: confirm === "DELETE" ? "rgba(208,59,59,0.4)" : "var(--border)",
-                color: confirm === "DELETE" ? "#a12424" : "var(--ink-muted)",
+                color: confirm === "DELETE" ? "var(--critical-ink)" : "var(--ink-muted)",
               }}
             >
               {busy ? "Deleting…" : "Delete my settings"}
@@ -501,7 +501,7 @@ export function ProjectFieldsCard() {
                     fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 5, flexShrink: 0, minWidth: 62,
                     textAlign: "center",
                     background: c.present ? "var(--good-bg)" : "var(--warning-bg)",
-                    color: c.present ? "#0a6b0a" : "#93630f",
+                    color: c.present ? "var(--good-ink)" : "var(--warning-ink)",
                   }}
                 >
                   {c.present ? "present" : "missing"}
@@ -512,7 +512,7 @@ export function ProjectFieldsCard() {
                   </div>
                   <div style={{ fontSize: 11.5, color: "var(--ink-muted)", lineHeight: 1.5 }}>{c.purpose}</div>
                   {c.typeMismatch && (
-                    <div style={{ fontSize: 11.5, color: "#a12424", marginTop: 2 }}>
+                    <div style={{ fontSize: 11.5, color: "var(--critical-ink)", marginTop: 2 }}>
                       {c.typeMismatch} — left alone on purpose. Rename or fix it in Notion; changing its type here
                       would destroy whatever is already in that column.
                     </div>

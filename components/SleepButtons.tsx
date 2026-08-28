@@ -29,25 +29,23 @@ export default function SleepButtons({ hasOpenLog }: { hasOpenLog: boolean }) {
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 12 }}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         <button
-          className="btn-primary"
-          style={{ background: "var(--violet)", flex: 1, justifyContent: "center", padding: "16px 0", fontSize: 14 }}
+          className="sleep-btn to-sleep"
           onClick={() => tap("start")}
           disabled={loading !== null || hasOpenLog}
         >
-          😴 {loading === "start" ? "Logging…" : "Went to Sleep"}
+          😴 {loading === "start" ? "Logging…" : "Went to sleep"}
         </button>
         <button
-          className="btn-primary"
-          style={{ background: "var(--yellow)", flex: 1, justifyContent: "center", padding: "16px 0", fontSize: 14, color: "#241a00" }}
+          className="sleep-btn to-wake"
           onClick={() => tap("end")}
           disabled={loading !== null || !hasOpenLog}
         >
-          ☀️ {loading === "end" ? "Logging…" : "Woke Up"}
+          ☀️ {loading === "end" ? "Logging…" : "Woke up"}
         </button>
       </div>
-      {error && <div style={{ color: "#a12424", fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+      {error && <div className="form-error" style={{ marginTop: 10 }}>{error}</div>}
       {hasOpenLog && (
         <div style={{ color: "var(--ink-muted)", fontSize: 12.5, marginTop: 10 }}>
           You're currently logged as asleep — tap "Woke Up" when you get up.

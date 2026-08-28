@@ -199,7 +199,7 @@ export default function ProjectFiles({
       </div>
 
       {error && (
-        <div style={{ fontSize: 11.5, color: "#a12424", marginTop: 6, lineHeight: 1.5 }}>{error}</div>
+        <div style={{ fontSize: 11.5, color: "var(--critical-ink)", marginTop: 6, lineHeight: 1.5 }}>{error}</div>
       )}
       <div style={{ fontSize: 10.5, color: "var(--ink-muted)", marginTop: 6, lineHeight: 1.5 }}>
         Stored on the Notion page, so they show up in Notion too. 5MB each on Notion&apos;s free plan.

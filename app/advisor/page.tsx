@@ -98,7 +98,7 @@ export default function AdvisorPage() {
             <div style={{ alignSelf: "flex-start", color: "var(--ink-muted)", fontSize: 13 }}>Thinking…</div>
           )}
           {error && (
-            <div style={{ alignSelf: "flex-start", color: "#a12424", fontSize: 12.5 }}>
+            <div style={{ alignSelf: "flex-start", color: "var(--critical-ink)", fontSize: 12.5 }}>
               {error} — check that ANTHROPIC_API_KEY is set in .env.local.
             </div>
           )}

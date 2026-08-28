@@ -786,6 +786,65 @@ export async function endSleepLog(pageId: string, sleepISO: string, wakeISO: str
   });
 }
 
+/**
+ * Writes a night you forgot to tap through.
+ *
+ * Duration is computed here rather than trusted from the form, so a manual
+ * entry and a tapped one are calculated the same way and the averages on the
+ * dashboard stay comparable. A wake time before the sleep time is rejected
+ * rather than stored as a negative night.
+ */
+export async function createSleepLog(input: { sleepISO: string; wakeISO?: string; notes?: string }) {
+  const hours = input.wakeISO
+    ? (new Date(input.wakeISO).getTime() - new Date(input.sleepISO).getTime()) / 3_600_000
+    : undefined;
+  if (hours !== undefined && hours <= 0) {
+    throw new Error("Wake time has to be after the sleep time.");
+  }
+  return notionFetch("/pages", {
+    method: "POST",
+    body: JSON.stringify({
+      parent: { database_id: (await dbMap()).sleepLogs },
+      properties: {
+        Name: { title: [{ text: { content: new Date(input.sleepISO).toLocaleString() } }] },
+        "Sleep Time": { date: { start: input.sleepISO } },
+        ...(input.wakeISO ? { "Wake Time": { date: { start: input.wakeISO } } } : {}),
+        ...(hours !== undefined ? { "Duration (hrs)": { number: Math.round(hours * 100) / 100 } } : {}),
+        ...(input.notes ? { Notes: { rich_text: [{ text: { content: input.notes } }] } } : {}),
+      },
+    }),
+  });
+}
+
+/**
+ * Corrects an entry that is already there — a tap at the wrong moment, or a
+ * manual entry with a typo. Fixing beats deleting and re-adding: the row
+ * keeps its place in the history and nothing has to be retyped.
+ */
+export async function updateSleepLog(
+  pageId: string,
+  input: { sleepISO?: string; wakeISO?: string | null; notes?: string }
+) {
+  const properties: Record<string, unknown> = {};
+  if (input.sleepISO) properties["Sleep Time"] = { date: { start: input.sleepISO } };
+  if (input.wakeISO !== undefined) {
+    properties["Wake Time"] = { date: input.wakeISO ? { start: input.wakeISO } : null };
+  }
+  if (input.notes !== undefined) {
+    properties.Notes = { rich_text: input.notes ? [{ text: { content: input.notes } }] : [] };
+  }
+  // Recompute duration whenever either end moves, so it can never disagree
+  // with the times sitting beside it.
+  if (input.sleepISO && input.wakeISO) {
+    const hours = (new Date(input.wakeISO).getTime() - new Date(input.sleepISO).getTime()) / 3_600_000;
+    if (hours <= 0) throw new Error("Wake time has to be after the sleep time.");
+    properties["Duration (hrs)"] = { number: Math.round(hours * 100) / 100 };
+  } else if (input.wakeISO === null) {
+    properties["Duration (hrs)"] = { number: null };
+  }
+  return notionFetch(`/pages/${pageId}`, { method: "PATCH", body: JSON.stringify({ properties }) });
+}
+
 /** Archives (soft-deletes) a mistaken Sleep Logs entry — e.g. an accidental tap that logged 0h. */
 export async function deleteSleepLog(pageId: string) {
   return notionFetch(`/pages/${pageId}`, {

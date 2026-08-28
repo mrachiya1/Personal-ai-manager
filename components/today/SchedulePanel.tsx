@@ -112,10 +112,12 @@ export default function SchedulePanel({
                 </div>
 
                 <div className="plan-when">
-                  <span className="pw-range">
-                    {time(block.start)} – {time(block.end)}
-                  </span>
-                  {block.planet && <span className="pw-hora">{block.planet} hora</span>}
+                  {/* A project deadline has no duration — it is a moment, not
+                      a block. Printing "6:22 PM – 6:22 PM" for it looked like
+                      a bug, because it reads like one. */}
+                  <span className="pw-range">{fixed ? "Due today" : `${time(block.start)} – ${time(block.end)}`}</span>
+                  {block.planet && !fixed && <span className="pw-hora">{block.planet} hora</span>}
+                  {fixed && <span className="pw-hora">Project deadline</span>}
                 </div>
               </div>
             );

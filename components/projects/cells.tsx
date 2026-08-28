@@ -205,7 +205,7 @@ export function DateCell({
     <div
       className={`pw-cell is-picker${value ? "" : " empty"}`}
       onClick={() => setEditing(true)}
-      style={{ color: tone === "late" ? "#b23636" : tone === "soon" ? "#93630f" : undefined, fontWeight: tone ? 600 : undefined }}
+      style={{ color: tone === "late" ? "var(--critical-ink)" : tone === "soon" ? "var(--warning-ink)" : undefined, fontWeight: tone ? 600 : undefined }}
     >
       <span style={{ whiteSpace: "nowrap" }}>{label}</span>
     </div>

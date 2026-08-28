@@ -319,7 +319,7 @@ export default function ProjectsWorkspace({
             borderRadius: 11, background: "var(--warning-bg)", border: "1px solid rgba(250,178,25,0.3)", flexWrap: "wrap",
           }}
         >
-          <div style={{ fontSize: 12.5, lineHeight: 1.55, color: "#8a5a00", flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 12.5, lineHeight: 1.55, color: "var(--warning-ink)", flex: 1, minWidth: 200 }}>
             <strong>Some columns are missing from Notion.</strong> Assignee, value, start date, headline, client
             requests and review tracking need fields your Projects database doesn&apos;t have yet.
           </div>

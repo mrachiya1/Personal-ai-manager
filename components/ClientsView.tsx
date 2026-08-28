@@ -270,7 +270,7 @@ export default function ClientsView({
               </div>
               <div className="stat-mini">
                 <div className="stat-label">Outstanding</div>
-                <div className="stat-value" style={{ color: outstanding > 0 ? "#a12424" : undefined }}>
+                <div className="stat-value" style={{ color: outstanding > 0 ? "var(--critical-ink)" : undefined }}>
                   {formatMoney(outstanding)}
                 </div>
               </div>

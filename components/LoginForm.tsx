@@ -91,7 +91,7 @@ export default function LoginForm({
           style={{
             fontSize: 12.5,
             lineHeight: 1.55,
-            color: "#a12424",
+            color: "var(--critical-ink)",
             background: "var(--critical-bg)",
             border: "1px solid rgba(208,59,59,0.25)",
             borderRadius: 9,

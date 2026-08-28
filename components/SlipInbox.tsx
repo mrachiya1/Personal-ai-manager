@@ -325,7 +325,7 @@ export default function SlipInbox({
           style={{
             fontSize: 12.5, lineHeight: 1.6, borderRadius: 10, padding: "11px 13px", marginBottom: 14,
             background: banner.kind === "ok" ? "var(--good-bg)" : "var(--critical-bg)",
-            color: banner.kind === "ok" ? "#0a6b0a" : "#a12424",
+            color: banner.kind === "ok" ? "var(--good-ink)" : "var(--critical-ink)",
             border: `1px solid ${banner.kind === "ok" ? "rgba(12,163,12,0.25)" : "rgba(208,59,59,0.25)"}`,
           }}
         >
@@ -457,7 +457,7 @@ function SlipRow({
           </div>
 
           {slip.status === "error" ? (
-            <div style={{ fontSize: 12.5, color: "#a12424", lineHeight: 1.6 }}>
+            <div style={{ fontSize: 12.5, color: "var(--critical-ink)", lineHeight: 1.6 }}>
               {slip.error}
               <div style={{ color: "var(--ink-muted)", marginTop: 3 }}>
                 You can still type the details in by hand and save with the rest.

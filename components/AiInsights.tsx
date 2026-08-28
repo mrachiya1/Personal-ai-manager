@@ -10,9 +10,9 @@ interface Insight {
 }
 
 const TONE: Record<string, { bg: string; fg: string; label: string }> = {
-  urgent: { bg: "var(--critical-bg)", fg: "#a12424", label: "Act now" },
-  watch: { bg: "var(--warning-bg)", fg: "#93630f", label: "Watch" },
-  info: { bg: "var(--good-bg)", fg: "#0a6b0a", label: "FYI" },
+  urgent: { bg: "var(--critical-bg)", fg: "var(--critical-ink)", label: "Act now" },
+  watch: { bg: "var(--warning-bg)", fg: "var(--warning-ink)", label: "Watch" },
+  info: { bg: "var(--good-bg)", fg: "var(--good-ink)", label: "FYI" },
 };
 
 /**
@@ -85,7 +85,7 @@ export default function AiInsights({
         )}
 
         {state === "error" && (
-          <div style={{ fontSize: 12.5, color: "#a12424", lineHeight: 1.6 }}>
+          <div style={{ fontSize: 12.5, color: "var(--critical-ink)", lineHeight: 1.6 }}>
             {error}
             <div style={{ color: "var(--ink-muted)", marginTop: 6 }}>
               An OpenRouter key is needed for this — add one under Settings.

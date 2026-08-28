@@ -31,7 +31,7 @@ export default function SetupBanner({ unmappedCount, total }: { unmappedCount: n
         <circle cx="12" cy="12" r="9" />
         <path d="M12 8v5M12 16h.01" />
       </svg>
-      <div style={{ fontSize: 12.5, lineHeight: 1.55, color: "#8a5a00", minWidth: 0, flex: 1 }}>
+      <div style={{ fontSize: 12.5, lineHeight: 1.55, color: "var(--warning-ink)", minWidth: 0, flex: 1 }}>
         {allUnmapped ? (
           <>
             <strong>Almost there.</strong> Your Notion is connected, but the app doesn&apos;t know which databases to

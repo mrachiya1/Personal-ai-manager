@@ -159,7 +159,7 @@ async function FinanceBody() {
         </div>
         <div className="card stat-tile">
           <span className="stat-label">Net This Month</span>
-          <div className={`stat-value`} style={{ color: monthIncomeTotal - monthTotal >= 0 ? undefined : "#a12424" }}>
+          <div className={`stat-value`} style={{ color: monthIncomeTotal - monthTotal >= 0 ? undefined : "var(--critical-ink)" }}>
             {formatMoney(monthIncomeTotal - monthTotal)}
           </div>
           <div className="stat-delta flat">Income − expenses</div>
