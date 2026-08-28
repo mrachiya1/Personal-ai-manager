@@ -117,9 +117,20 @@ function createSqliteStore(): KVStore | null {
     const fs = getBuiltin("node:fs") as typeof import("fs");
     const path = getBuiltin("node:path") as typeof import("path");
 
-    const dir = path.join(process.cwd(), "data");
-    fs.mkdirSync(dir, { recursive: true });
-    const db = new DatabaseSync(path.join(dir, "orex.db"));
+    // Overridable so a test run can start from an empty store. Without it,
+    // an isolation test passes on the second run purely because the accounts
+    // it expects to create are already there from the first.
+    const override = process.env["OREX_STORE_PATH"];
+    let file: string;
+    if (override) {
+      fs.mkdirSync(path.dirname(override), { recursive: true });
+      file = override;
+    } else {
+      const dir = path.join(process.cwd(), "data");
+      fs.mkdirSync(dir, { recursive: true });
+      file = path.join(dir, "orex.db");
+    }
+    const db = new DatabaseSync(file);
     db.exec(
       `CREATE TABLE IF NOT EXISTS orex_kv (
          k TEXT PRIMARY KEY,

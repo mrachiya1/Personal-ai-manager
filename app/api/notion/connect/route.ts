@@ -31,7 +31,11 @@ export async function POST(req: Request) {
   }
 
   try {
-    const res = await fetch("https://api.notion.com/v1/users/me", {
+    // Same overridable base as lib/notion.ts. Hardcoding the URL here meant
+    // this route — the one that decides whether a token is real — was the
+    // only part of the Notion layer the harness could not exercise.
+    const base = process.env["NOTION_API_BASE_URL"] || "https://api.notion.com/v1";
+    const res = await fetch(`${base}/users/me`, {
       headers: { Authorization: `Bearer ${token}`, "Notion-Version": "2022-06-28" },
       cache: "no-store",
     });

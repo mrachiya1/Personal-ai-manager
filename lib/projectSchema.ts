@@ -12,7 +12,7 @@
 // retypes or removes an existing one, so running it against a database that
 // already has some of these is a no-op for those.
 
-export type PropKind = "date" | "number" | "rich_text" | "relation" | "files";
+export type PropKind = "date" | "number" | "rich_text" | "relation" | "files" | "select";
 
 export interface RequiredProp {
   /** Exact Notion property name. */
@@ -20,6 +20,8 @@ export interface RequiredProp {
   kind: PropKind;
   /** For relations: which database key in the user's mapping to point at. */
   relatesTo?: "clients" | "team";
+  /** For selects: the options to create with it. */
+  options?: string[];
   /** Shown in the Settings UI so the person knows what they're agreeing to. */
   purpose: string;
 }
@@ -34,6 +36,14 @@ export const REQUIRED_PROJECT_PROPS: RequiredProp[] = [
   { name: "Last Reviewed", kind: "date", purpose: "When the project was last checked" },
   { name: "Reviewed By", kind: "relation", relatesTo: "team", purpose: "Which staff member did that review" },
   { name: "Files", kind: "files", purpose: "Briefs, contracts, references and deliverables attached to the project" },
+  {
+    name: "Completion Feel",
+    kind: "select",
+    options: ["Smooth flow", "Highly satisfying", "Grind but fine", "Heavy friction", "Burnout risk"],
+    purpose: "How the project actually felt to deliver — the advisor reads these back to spot burnout patterns",
+  },
+  { name: "Completion Note", kind: "rich_text", purpose: "What made it feel that way, in your own words" },
+  { name: "Completed On", kind: "date", purpose: "When it was marked done, so feel can be plotted against workload" },
 ];
 
 /** The Notion property-schema body for one required property. */
@@ -47,6 +57,8 @@ export function propertySchema(prop: RequiredProp, relationTargets: { clients: s
       return { rich_text: {} };
     case "files":
       return { files: {} };
+    case "select":
+      return { select: { options: (prop.options ?? []).map((name) => ({ name })) } };
     case "relation": {
       const databaseId = prop.relatesTo === "clients" ? relationTargets.clients : relationTargets.team;
       // single_property = a one-way relation. A dual_property relation would
@@ -72,6 +84,7 @@ const NOTION_TYPE_FOR: Record<PropKind, string> = {
   rich_text: "rich_text",
   relation: "relation",
   files: "files",
+  select: "select",
 };
 
 /** Compares the live database schema against what the screen needs. */

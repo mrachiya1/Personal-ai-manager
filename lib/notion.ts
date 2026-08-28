@@ -281,6 +281,9 @@ async function _getProjects(): Promise<Project[]> {
     reviewedBy: relationIds(p.properties, "Reviewed By"),
     // Notion maintains this on every page; no property to create.
     lastEditedTime: p.last_edited_time,
+    completionFeel: select(p.properties, "Completion Feel") || undefined,
+    completionNote: richText(p.properties, "Completion Note"),
+    completedOn: dateStart(p.properties, "Completed On"),
     files: files(p.properties, "Files"),
   }));
 }
@@ -302,6 +305,9 @@ export interface ProjectUpdate {
   clientRequests: string;
   lastReviewed: string;
   reviewedBy: string[];
+  completionFeel: string;
+  completionNote: string;
+  completedOn: string;
 }
 
 /**
@@ -343,6 +349,11 @@ function projectProperties(input: Partial<ProjectUpdate>): Record<string, unknow
   if (input.clientRequests !== undefined) properties["Client Requests"] = text(input.clientRequests);
   if (input.lastReviewed !== undefined) properties["Last Reviewed"] = date(input.lastReviewed);
   if (input.reviewedBy !== undefined) properties["Reviewed By"] = rel(input.reviewedBy);
+  if (input.completionFeel !== undefined) {
+    properties["Completion Feel"] = input.completionFeel ? { select: { name: input.completionFeel } } : { select: null };
+  }
+  if (input.completionNote !== undefined) properties["Completion Note"] = text(input.completionNote);
+  if (input.completedOn !== undefined) properties["Completed On"] = date(input.completedOn);
 
   return properties;
 }

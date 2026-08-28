@@ -63,6 +63,13 @@ export interface Project {
   lastEditedTime?: string;
   /** Attachments on the project page. */
   files: ProjectFile[];
+
+  /* The completion-feel loop. Written when a project is marked delivered, so
+     the advisor can correlate how work felt against what was going on that
+     week. All optional — a database without the properties reads undefined. */
+  completionFeel?: string;
+  completionNote?: string;
+  completedOn?: string;
 }
 
 export interface ProjectFile {

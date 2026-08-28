@@ -159,6 +159,38 @@ for (const [env, key] of Object.entries(ENV_KEYS)) {
   if (id) byId.set(id.replace(/-/g, "").toLowerCase(), key);
 }
 
+// A second, completely separate workspace, for the isolation test. Its ids are
+// in their own space (bbbb…) and its only content is one uniquely-named
+// project — so "user B can see user A's data" and "user A can see user B's"
+// are both checkable by a plain string search of the rendered page.
+const TENANT_B = {
+  projects: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb03",
+  companies: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb01",
+};
+const TENANT_B_FIXTURES = {
+  [TENANT_B.projects]: [
+    page("b-pr1", {
+      Name: T("TENANT-B-SEALED-PROJECT"),
+      Company: L(["b-co1"]),
+      Category: M(["Internal"]),
+      Status: S("Production"),
+      Description: R("Only user B may ever see this."),
+      Deadline: D(day(5)),
+      "Render Priority": S("High"),
+      "Estimated Render Time (hrs)": N(1),
+      Client: L([]), "Assigned To": L([]), "Start Date": D(day(-5)), Value: N(1),
+      Headline: R("Isolation canary"), "Client Requests": R(""), "Last Reviewed": D(null),
+      "Reviewed By": L([]), Files: { files: [] },
+    }),
+  ],
+  [TENANT_B.companies]: [
+    page("b-co1", {
+      Name: T("TENANT-B-COMPANY"), Type: S("Studio"), "Start Date": D(day(-100)),
+      Goals: R(""), Description: R(""), "Monthly Revenue Target": N(1), Plan: R(""),
+    }),
+  ],
+};
+
 const send = (res, code, body) => {
   res.writeHead(code, { "Content-Type": "application/json" });
   res.end(JSON.stringify(body));
@@ -176,7 +208,13 @@ http
       console.log(`${req.method} ${path}`);
       const q = path.match(/^\/databases\/([^/]+)\/query$/);
       if (q) {
-        const key = byId.get(q[1].replace(/-/g, "").toLowerCase());
+        const raw = q[1].replace(/-/g, "").toLowerCase();
+        // Tenant B's own space. Anything else in that space is legitimately
+        // empty, which is exactly what a fresh workspace looks like.
+        if (raw.startsWith("bbbb")) {
+          return send(res, 200, { object: "list", results: TENANT_B_FIXTURES[raw] ?? [], has_more: false, next_cursor: null });
+        }
+        const key = byId.get(raw);
         return send(res, 200, { object: "list", results: key ? F[key] : [], has_more: false, next_cursor: null });
       }
 
