@@ -59,10 +59,13 @@ function Placeholder({ kind }: { kind: ThumbCategory }) {
     );
   }
   if (kind === "task") {
+    // A list, not a ticked box. The first version was a square with a check
+    // in it, sitting immediately beside the row's real checkbox — two
+    // checkboxes per row, one of which does nothing when you click it.
     return (
       <svg {...common}>
-        <rect x="3.6" y="3.6" width="16.8" height="16.8" rx="3.4" />
-        <path d="m8.2 12.4 2.6 2.6 5-5.4" />
+        <path d="M8.4 6.6h11M8.4 12h11M8.4 17.4h11" />
+        <path d="M4.6 6.6h.01M4.6 12h.01M4.6 17.4h.01" />
       </svg>
     );
   }

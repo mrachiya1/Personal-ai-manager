@@ -17,7 +17,7 @@ import {
 import { avatarColor } from "./cells";
 import AddPropertyButton from "./AddPropertyButton";
 import Thumbnail, { categoryIcon } from "./Thumbnail";
-import TaskTree, { type TaskTreeHandlers } from "./TaskTree";
+import TaskRows, { type TaskRowHandlers } from "./TaskRows";
 
 /**
  * Assignees as coloured dots.
@@ -111,8 +111,8 @@ export interface TreeHandlers {
   openResources: (row: ProjectRow) => void;
   requestCompletion: (row: ProjectRow) => void;
   requestDelete: (row: ProjectRow) => void;
-  addTask: TaskTreeHandlers["addTask"];
-  removeTask: TaskTreeHandlers["removeTask"];
+  addTask: TaskRowHandlers["addTask"];
+  removeTask: TaskRowHandlers["removeTask"];
   /** Locally-stored previews, keyed by project or task page id. */
   thumbs: Record<string, string>;
 }
@@ -324,6 +324,8 @@ function ProjectRowView({
   const { clientOptions, categoryOptions, teamOptions, statusOptions, priorityOptions, currency } = options;
   const p = row.project;
   const nav = (col: number): CellNav => ({ row: rowIndex, col });
+  // Thirteen fixed columns, the user's custom ones, and the add-property cell.
+  const columns = 14 + options.custom.length;
 
   return (
     <>
@@ -515,6 +517,9 @@ function ProjectRowView({
 
         {/* 10 — resources */}
         <td data-label="Files">
+          {/* A link, as the reference has it. The bordered button was 96px of
+              chrome in a 78px column, which is what pushed "Check here" into
+              the budget figure beside it. */}
           <button className="pt-res" onClick={() => handlers.openResources(row)}>
             Check here
             {p.files.length > 0 && <span className="pt-res-count">{p.files.length}</span>}
@@ -570,9 +575,33 @@ function ProjectRowView({
 
       {/* The progress line sits in its own zero-height row so it can span the
           whole table without fighting the cell padding above it. */}
-      <tr className="pt-progress-row" aria-hidden>
-        <td colSpan={14 + options.custom.length}>
-          <div className="pt-progress" title={row.progress === null ? "No sub-tasks" : `${row.progress}% of sub-tasks done`}>
+      {/* Sub-tasks are rows of this table, not a panel inside one cell — so a
+          task's deadline sits under the word "Deadline" rather than under it
+          by coincidence. */}
+      {expanded && (
+        <TaskRows
+          tree={row.tree}
+          projectId={row.project.id}
+          teamOptions={teamOptions}
+          columns={columns}
+          handlers={handlers}
+          baseRow={rowIndex}
+        />
+      )}
+
+      {/* The progress track closes the group: under the parent when collapsed,
+          under the last sub-task when open, so it always reads as the bottom
+          border of the thing it measures. */}
+      <tr className={`pt-progress-row${expanded ? " open" : ""}`} aria-hidden>
+        <td colSpan={columns}>
+          <div
+            className="pt-progress"
+            title={
+              row.progress === null
+                ? "No sub-tasks"
+                : `${row.progress}% — ${row.doneCount} of ${row.taskCount} sub-items done, counted at the deepest level`
+            }
+          >
             <i
               className={row.urgency === "late" ? "late" : row.progress === 100 ? "done" : ""}
               style={{ width: `${row.progress ?? 0}%` }}
@@ -580,21 +609,6 @@ function ProjectRowView({
           </div>
         </td>
       </tr>
-
-      {expanded && (
-        <tr className="pt-detail-row">
-          <td colSpan={14 + options.custom.length}>
-            <TaskTree
-              tree={row.tree}
-              projectId={row.project.id}
-              teamOptions={teamOptions}
-              thumbs={handlers.thumbs}
-              handlers={handlers}
-              baseRow={rowIndex}
-            />
-          </td>
-        </tr>
-      )}
     </>
   );
 }
@@ -657,6 +671,7 @@ export default function ProjectTree({
               </button>
               {section.colorVar && <span className="company-dot" style={{ background: `var(${section.colorVar})` }} />}
               <div className="pt-section-title">
+                {section.eyebrow && <span className="pt-section-eyebrow">{section.eyebrow}</span>}
                 <h2>{section.title}</h2>
                 <span className="pt-section-sub">{section.subtitle}</span>
               </div>
@@ -671,25 +686,45 @@ export default function ProjectTree({
 
             {isOpen && (
               <div className="pt-scroll">
-                <table className="pt-table" style={{ minWidth: 1398 + options.custom.length * 132 + 44 }}>
+                {/*
+                  Proportional widths, no min-width, and no pixel colgroup.
+                  Those three together were the horizontal scrollbar: thirteen
+                  hardcoded pixel columns summing past 1400px meant every
+                  viewport narrower than that got a scrollbar whether or not
+                  the content needed one. Percentages let the columns shrink
+                  with the window, and the name column keeps the slack.
+                */}
+                <table
+                  className="pt-table"
+                  /*
+                    The thirteen designed columns fit any laptop, so at the
+                    default set the table never scrolls — that was the
+                    complaint. Custom Notion properties are additive and
+                    unbounded, though, and squeezing a fourteenth and
+                    fifteenth column into the same width clips all fifteen.
+                    So the scroll comes back only in proportion to what the
+                    workspace added, and only then does the edge fade show.
+                  */
+                  style={options.custom.length ? { minWidth: 1150 + options.custom.length * 110 } : undefined}
+                >
                   <colgroup>
-                    <col style={{ width: 232 }} />
-                    <col style={{ width: 104 }} />
-                    <col style={{ width: 116 }} />
-                    <col style={{ width: 132 }} />
-                    <col style={{ width: 104 }} />
-                    <col style={{ width: 88 }} />
-                    <col style={{ width: 122 }} />
-                    <col style={{ width: 84 }} />
-                    <col style={{ width: 146 }} />
-                    <col style={{ width: 92 }} />
-                    <col style={{ width: 72 }} />
-                    <col style={{ width: 100 }} />
-                    <col style={{ width: 106 }} />
+                    <col className="c-name" />
+                    <col className="c-date" />
+                    <col className="c-date" />
+                    <col className="c-mid" />
+                    <col className="c-mid" />
+                    <col className="c-narrow" />
+                    <col className="c-mid" />
+                    <col className="c-narrow" />
+                    <col className="c-mid" />
+                    <col className="c-narrow" />
+                    <col className="c-narrow" />
+                    <col className="c-narrow" />
+                    <col className="c-narrow" />
                     {options.custom.map((prop) => (
-                      <col key={prop.name} style={{ width: 132 }} />
+                      <col key={prop.name} className="c-mid" />
                     ))}
-                    <col style={{ width: 44 }} />
+                    <col className="c-add" />
                   </colgroup>
                   <thead>
                     <tr>
@@ -704,7 +739,8 @@ export default function ProjectTree({
                       <th>Next task</th>
                       <th>Priority</th>
                       <th>Files</th>
-                      <th colSpan={2}>{personal ? "Billing" : "Budget & payment"}</th>
+                      <th>{personal ? "Billing" : "Budget"}</th>
+                      <th>{personal ? "" : "Payment"}</th>
                       {options.custom.map((prop) => (
                         <th key={prop.name} title={`${prop.type}${prop.editable ? "" : " — computed by Notion"}`}>
                           {prop.name}

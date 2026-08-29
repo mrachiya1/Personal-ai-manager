@@ -1910,28 +1910,80 @@ html[data-theme="dark"]{
 .pt-caret:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; border-radius:5px; }
 
 /* ---------- the table ---------- */
-/* Thirteen columns will not fit a laptop, so the table scrolls — and a
-   scroll nobody can see reads as content that has been cut off. The fade
-   marks the edge; it sits above the table and ignores the pointer. */
+/*
+   No min-width and no pixel colgroup.
+   Thirteen hardcoded pixel columns summing past 1400px meant every viewport
+   narrower than that got a horizontal scrollbar whether or not the content
+   needed one — the scrollbar was in the stylesheet, not in the data. Auto
+   layout with proportional column hints lets the columns give as the window
+   narrows, and the name column absorbs the slack.
+
+   The wrapper keeps `overflow-x:auto` as a safety valve for a workspace with
+   a dozen custom properties; at the default column set it never triggers, so
+   the edge fade is drawn only when the table really is wider than its frame.
+*/
 .pt-scroll{ overflow-x:auto; position:relative; }
-.pt-scroll::after{
+/* Only drawn when the table really is wider than its frame, so it marks a
+   real edge rather than suggesting content is cut off when it isn't. */
+.pt-scroll:has(> table[style*="min-width"])::after{
   content:""; position:sticky; right:0; top:0; float:right;
-  width:34px; height:100%; margin-left:-34px; pointer-events:none;
+  width:30px; height:100%; margin-left:-30px; pointer-events:none;
   background:linear-gradient(to right, transparent, var(--surface));
 }
-.pt-table{ width:100%; border-collapse:collapse; table-layout:fixed; min-width:1398px; }
+/* table-layout:fixed is what actually holds the table to its frame: it makes
+   the percentage colgroup binding rather than a hint, so a long project name
+   can no longer widen a column and push the table past the viewport. Auto
+   layout ignored the percentages and sized to content — 1806px in a 1110px
+   frame, which is the scrollbar in a different disguise. */
+.pt-table{ width:100%; border-collapse:collapse; table-layout:fixed; min-width:0; }
+
+/* Widths by what the column actually holds. A date is 10 characters and a
+   status badge is one word, so giving them the same share wastes the first
+   and clips the second. */
+/* Sized so the thirteen designed columns total under 1100px — the content
+   width of a 1440 laptop with the rail open. That is the number that decides
+   whether this screen scrolls sideways at its default column set, and it was
+   worth measuring rather than guessing: the first pass summed to 1290. */
+.pt-table col.c-name{ width:224px; }
+.pt-table col.c-date{ width:82px; }
+.pt-table col.c-mid{ width:92px; }
+.pt-table col.c-narrow{ width:74px; }
+.pt-table col.c-add{ width:32px; }
+
 .pt-table th{
-  text-align:left; font-size:11px; font-weight:600; color:var(--ink-muted);
-  padding:9px 10px; border-bottom:1px solid var(--border); white-space:nowrap;
+  text-align:left; font-size:10.5px; font-weight:600; color:var(--ink-muted);
+  padding:9px 6px; border-bottom:1px solid var(--border);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
+.pt-table th:first-child, .pt-table td:first-child{ padding-left:14px; }
+/* The add-property header hosts a popover, so it must not clip. */
+.pt-table th.pt-add-col{ overflow:visible; }
+/*
+  No overflow:hidden on the cells themselves. The inline editors open an
+  absolutely-positioned popover anchored inside their cell, and clipping the
+  cell clips the popover to a 74px sliver — it renders, it just can't be
+  clicked, which reads as "the dropdown is broken". Truncation belongs on the
+  text inside instead.
+*/
 .pt-table td{
-  padding:7px 10px; vertical-align:top; font-size:12.5px; color:var(--ink-secondary);
+  padding:9px 6px; vertical-align:middle; font-size:12px; color:var(--ink-secondary);
 }
+.pt-table td > .ed-cell,
+.pt-table td > div > .ed-cell,
+.pt-table td.pt-muted,
+.pt-table td.pt-inherit{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* A cell with no inline editor in it has no popover to clip, so it can hold
+   its own content — which is what stops "Check here" printing across the
+   budget figure in the column beside it. */
+.pt-table td:not(:has(.ed-cell)){ overflow:hidden; }
+.pt-res, .pt-res-link{ max-width:100%; overflow:hidden; text-overflow:ellipsis; display:inline-flex; }
+.pt-row > td{ vertical-align:top; }
 .pt-row:hover > td{ background:var(--rail); }
 .pt-row.open > td{ background:var(--rail); }
-.pt-muted{ color:var(--ink-muted); font-size:11.5px; padding-top:13px !important; }
+.pt-muted{ color:var(--ink-muted); font-size:11.5px; }
+.pt-row .pt-muted{ padding-top:13px !important; }
 
-.pt-name-cell{ padding-left:12px !important; }
+.pt-name-cell{ padding-left:14px !important; }
 .pt-name{ display:flex; align-items:flex-start; gap:7px; min-width:0; }
 .pt-name-text{ min-width:0; flex:1; }
 .pt-headline{
@@ -1960,48 +2012,132 @@ html[data-theme="dark"]{
 .pt-check:hover{ border-color:var(--ink-muted); }
 .pt-check.on{ background:var(--good); border-color:var(--good); color:var(--ink-on-color); }
 .pt-check:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
+.pt-check.sub{ margin-top:0; width:16px; height:16px; }
+.pt-check.sub svg{ width:10px; height:10px; }
 
 .pt-res{
-  display:inline-flex; align-items:center; gap:5px; min-height:26px; padding:0 9px;
-  border-radius:7px; border:1px solid var(--border); background:var(--surface);
-  font:inherit; font-size:11.5px; font-weight:600; color:var(--ink-secondary); cursor:pointer;
+  display:inline-flex; align-items:center; gap:4px; min-height:26px; padding:0;
+  border:none; background:none; white-space:nowrap;
+  font:inherit; font-size:11.5px; font-weight:600; color:var(--blue-on-field); cursor:pointer;
 }
-.pt-res svg{ width:12px; height:12px; }
-.pt-res:hover{ background:var(--field); color:var(--ink); }
-.pt-res:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
+.pt-res::after{ content:""; position:absolute; }
+.pt-res:hover{ text-decoration:underline; }
+.pt-res:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; border-radius:4px; }
+.pt-res-count{
+  font-size:9.5px; font-weight:700; padding:0 4px; border-radius:999px;
+  background:var(--field); color:var(--ink-muted);
+}
 
 /* The progress line: its own row so it can span the table without fighting
-   the cell padding above it. */
+   the cell padding above it. It closes the group — directly under the parent
+   when collapsed, under the last sub-task when open. */
 .pt-progress-row td{ padding:0 !important; height:3px; }
 .pt-progress{ height:3px; background:var(--field); overflow:hidden; }
 .pt-progress i{
-  display:block; height:100%; background:var(--chart-2);
+  display:block; height:100%; background:var(--good);
   transition:width .25s ease;
 }
 .pt-progress i.done{ background:var(--good); }
 .pt-progress i.late{ background:var(--critical); }
+.pt-progress-row.open td{ padding:0 0 0 0 !important; }
 
 /* ---------- expanded sub-tasks ---------- */
-.pt-detail-row td{ padding:0 !important; background:var(--field); }
-.pt-detail{ padding:12px 16px 14px 40px; }
-.pt-detail-head{
-  display:flex; align-items:baseline; gap:10px; margin-bottom:8px;
-  font-size:10.5px; font-weight:650; letter-spacing:0.05em; text-transform:uppercase;
-  color:var(--ink-muted);
-}
-.pt-detail-count{ margin-left:auto; letter-spacing:0; text-transform:none; font-weight:600; }
-.pt-empty{ font-size:12px; color:var(--ink-muted); line-height:1.6; }
-.pt-tasks{ list-style:none; margin:0; padding:0; display:grid; gap:2px; }
-.pt-task{
-  display:grid; grid-template-columns:20px minmax(0, 1fr) 150px 140px;
-  align-items:center; gap:10px; padding:4px 0;
+/*
+   Sub-tasks are rows of the same table, sharing the same colgroup, so a
+   task's deadline sits under the word "Deadline" rather than under it by
+   coincidence. Only the first cell knows about depth.
+*/
+.pt-sub > td{
   border-top:1px solid var(--border);
+  background:var(--field);
+  vertical-align:middle;
+  padding-top:7px; padding-bottom:7px;
 }
-.pt-task:first-child{ border-top:none; }
-.pt-task.done .pt-task-name{ text-decoration:line-through; opacity:0.6; }
-.pt-task .pt-check{ margin-top:0; }
-.pt-task-name{ min-width:0; }
-.pt-task-due, .pt-task-status{ min-width:0; }
+.pt-sub:hover > td{ background:var(--rail); }
+.pt-sub.done .pt-sub-title .ed-cell{ text-decoration:line-through; opacity:0.6; }
+
+.pt-sub-name{ position:relative; padding-left:calc(14px + var(--pt-indent, 0px)) !important; }
+/* The flex row lives inside the cell. A <td> set to display:flex is no longer
+   a table cell — it leaves the column grid and drags everything after it out
+   of line with the headers. */
+.pt-sub-inner{ display:flex; align-items:center; gap:8px; min-width:0; }
+.pt-sub-inner > *{ flex-shrink:0; }
+
+/* The branch line: a short elbow reaching from the indent to the caret. Drawn
+   on the cell rather than as a wrapper div per level, so it lines up at every
+   depth without a nested element for each one. */
+.pt-branch{
+  position:absolute; left:calc(var(--pt-indent, 0px) + 2px); top:0; bottom:50%;
+  width:9px; border-left:1px solid var(--border-strong);
+  border-bottom:1px solid var(--border-strong);
+  border-bottom-left-radius:5px; pointer-events:none;
+}
+.pt-sub[data-depth="0"] .pt-branch{ display:none; }
+
+.pt-caret.sm{ width:16px; height:16px; }
+.pt-caret.sm svg{ width:11px; height:11px; }
+.pt-caret.sm.placeholder{ cursor:default; }
+
+.pt-sub-title{ min-width:0; flex:1 1 auto; overflow:hidden; }
+/* Nothing in a data cell may set its own width past the column. */
+.pt-table td .badge, .pt-table td .prio, .pt-table td .tag{
+  max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  padding-left:7px; padding-right:7px; font-size:10.5px;
+}
+.pt-sub-count{
+  font-size:10.5px; color:var(--ink-muted); font-variant-numeric:tabular-nums;
+  white-space:nowrap; flex-shrink:0;
+}
+.pt-flag{
+  font-size:9.5px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
+  padding:1px 5px; border-radius:5px; background:var(--warning-bg); color:var(--warning-ink);
+  white-space:nowrap; flex-shrink:0;
+}
+.pt-inherit{ color:var(--ink-muted); }
+.pt-res-link{ color:var(--blue-on-field); text-decoration:none; font-size:11.5px; white-space:nowrap; }
+.pt-res-link:hover{ text-decoration:underline; }
+
+.pt-sub-del{
+  width:20px; height:20px; padding:0; border:none; background:none; cursor:pointer;
+  color:var(--ink-muted); border-radius:5px; font-size:12px; line-height:1;
+  opacity:0; transition:opacity .12s ease; flex-shrink:0;
+}
+.pt-sub:hover .pt-sub-del, .pt-sub-del:focus-visible{ opacity:1; }
+.pt-sub-del:hover{ color:var(--critical); background:var(--critical-bg); }
+
+.pt-sub-empty{
+  font-size:12px; color:var(--ink-muted); line-height:1.6;
+  background:var(--field); border-top:1px solid var(--border); padding:12px 14px !important;
+}
+
+/* ---------- the inline add-task row ---------- */
+/*
+   Transparent until it is needed, and when it opens the inputs land in the
+   columns their values belong to — a form floating below the table would make
+   someone map five fields onto twelve headings in their head, every time.
+*/
+.pt-addrow > td{ background:var(--field); border-top:1px solid var(--border); padding-top:5px; padding-bottom:7px; }
+.pt-addrow-name{ padding-left:calc(14px + var(--pt-indent, 0px)) !important; }
+.pt-addrow.open > td{ padding-top:7px; }
+.pt-add-open{
+  display:inline-flex; align-items:center; gap:6px; font:inherit;
+  font-size:11.5px; font-weight:600; color:var(--ink-muted);
+  background:none; border:1px dashed var(--border-strong); border-radius:7px;
+  padding:5px 10px; cursor:pointer;
+}
+.pt-add-open svg{ width:12px; height:12px; }
+.pt-add-open:hover{ color:var(--ink); border-color:var(--ink-muted); background:var(--surface); }
+.pt-add-open:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
+
+.pt-inline-input{
+  width:100%; min-width:0; font:inherit; font-size:12px;
+  padding:5px 8px; border-radius:7px;
+  border:1px solid var(--border-strong); background:var(--surface); color:var(--ink);
+}
+.pt-inline-input:focus{ outline:2px solid var(--blue); outline-offset:1px; }
+.pt-inline-error{ font-size:11px; color:var(--critical); margin-top:4px; }
+.pt-inline-actions{ white-space:nowrap; }
+.pt-inline-actions .btn-save, .pt-inline-actions .btn-discard{ margin-right:6px; }
 
 /* ---------- toast ---------- */
 .pt-toast{
@@ -2104,11 +2240,8 @@ html[data-theme="dark"]{
   .donut-wrap{ gap:18px; }
   .pt-filters{ margin-left:0; width:100%; }
   .pt-search{ flex:1; width:auto; }
-  .pt-task{ grid-template-columns:20px minmax(0, 1fr); row-gap:4px; }
-  .pt-task-due, .pt-task-status{ grid-column:2; }
 }
 @media (max-width: 620px){
-  .pt-detail{ padding-left:16px; }
   .pt-toast{ left:16px; right:16px; text-align:center; }
 }
 
@@ -2438,8 +2571,33 @@ html[data-theme="dark"] .btn-danger:hover:not(:disabled){ filter:brightness(1.1)
   .pt-headline{ white-space:normal; }
   .pt-progress-row td{ padding:0 14px !important; }
   .pt-progress{ border-radius:2px; }
-  .pt-detail{ padding:12px 14px 14px; }
   .pt-add-col{ display:none !important; }
+
+  /* Sub-task rows become indented cards on the same principle: the grid is
+     gone, so each cell carries its own label and the indent survives as a
+     left border rather than as padding on a column that no longer exists. */
+  .pt-sub, .pt-addrow{ display:block; }
+  .pt-sub > td, .pt-addrow > td{ display:block; padding:0; border-top:none; }
+  .pt-sub{
+    padding:10px 14px 11px; border-top:1px solid var(--border);
+    background:var(--field);
+    border-left:2px solid var(--border-strong);
+    margin-left:calc(var(--pt-indent, 0px) / 1.6);
+  }
+  .pt-sub > td[data-label]{ display:inline-block; margin:6px 16px 0 0; }
+  .pt-sub > td[data-label]::before{
+    content:attr(data-label);
+    display:block; margin-bottom:2px;
+    font-size:9.5px; font-weight:650; letter-spacing:0.05em; text-transform:uppercase;
+    color:var(--ink-muted);
+  }
+  .pt-sub > td:empty{ display:none; }
+  .pt-sub-name{ display:flex; }
+  .pt-branch{ display:none !important; }
+  .pt-sub-del{ opacity:1; }
+  .pt-addrow{ padding:8px 14px 12px; background:var(--field); }
+  .pt-addrow.open > td{ margin-bottom:7px; }
+  .pt-addrow.open > td:empty{ display:none; }
 
   /* Touch targets: the checkbox and caret grow, and the ··· is always shown
      because there is no hover on a phone to reveal it. */
@@ -2495,7 +2653,7 @@ html[data-theme="dark"] .btn-danger:hover:not(:disabled){ filter:brightness(1.1)
 /* Thumbnails                                                          */
 /* ================================================================== */
 
-.pt-thumb, .tt-thumb{ display:inline-flex; flex:0 0 auto; }
+.pt-thumb{ display:inline-flex; flex:0 0 auto; }
 
 .thumb{
   position:relative; display:inline-flex; align-items:center; justify-content:center;
@@ -2547,127 +2705,45 @@ html[data-theme="dark"] .btn-danger:hover:not(:disabled){ filter:brightness(1.1)
 }
 .lb-close:hover{ background:rgba(255,255,255,0.14); }
 
-/* ================================================================== */
-/* Recursive task tree                                                 */
-/*                                                                     */
-/* Depth is a CSS custom property on the row, so one rule set indents   */
-/* every level. A stylesheet with .level-1/.level-2/.level-3 classes    */
-/* would cap the nesting at however many were written — the whole point */
-/* here is that the data decides how deep it goes.                     */
-/* ================================================================== */
 
-.tt-list{ list-style:none; margin:0; padding:0; display:grid; gap:1px; }
-.tt-children{ display:block; }
+/* ==================================================================
+   Projects: the dark luxury surface
+   ==================================================================
+   The reference for this screen is near-black — #0B0F17 with hairline
+   borders — while the rest of the app runs the warmer, lower-glare palette
+   that was tuned for reading all day. Both can be true: this scopes the
+   cooler surface to the Projects tables in dark mode only, so the screen
+   matches its design without repainting Today, Finance and the rest.
 
-.tt-row{
-  position:relative;
-  display:grid; align-items:center; gap:10px;
-  grid-template-columns: 16px 20px 32px minmax(160px, 1.6fr) minmax(120px, 0.9fr) 64px 82px 104px 74px 88px 22px;
-  padding:6px 4px 6px calc(var(--tt-depth, 0) * 22px + 4px);
-  border-top:1px solid var(--border);
-  font-size:12.5px; min-width:0;
+   Light mode is untouched. Flipping a light theme to #0B0F17 would not be
+   "luxury dark", it would be one screen in the wrong theme.
+   ================================================================== */
+html[data-theme="dark"] .pt-section{
+  --surface:#0B0F17;
+  --surface-raised:#111725;
+  --field:#0E1420;
+  --rail:#141B2A;
+  --border:rgba(148,163,184,0.10);
+  --border-strong:rgba(148,163,184,0.22);
+  --control-edge:#5b6577;
+  background:var(--surface);
+  border-color:var(--border-strong);
 }
-.tt-row:first-child{ border-top:none; }
-.tt-row.done .ed-cell{ text-decoration:line-through; opacity:0.62; }
-
-/* The connecting guideline. Drawn on the row rather than on a wrapper so it
-   lines up with the caret column at every depth without a nested div per level. */
-.tt-rail{
-  position:absolute; top:0; bottom:0;
-  left:calc(var(--tt-depth, 0) * 22px - 9px);
-  width:1px; background:var(--border-strong);
-  display:var(--tt-rail-display, block);
+html[data-theme="dark"] .pt-section .pt-section-head{
+  background:linear-gradient(180deg, #131A28 0%, #0B0F17 100%);
+  border-bottom:1px solid var(--border);
 }
-.tt-row[data-depth="0"] .tt-rail{ display:none; }
-
-.tt-caret{
-  width:16px; height:16px; padding:0; display:inline-flex; align-items:center; justify-content:center;
-  background:none; border:none; cursor:pointer; color:var(--ink-muted); border-radius:4px;
-  transition:transform 130ms ease;
+html[data-theme="dark"] .pt-table thead th{
+  background:#111725;
+  color:#93a0b4;
 }
-.tt-caret svg{ width:12px; height:12px; }
-.tt-caret.open{ transform:rotate(90deg); }
-.tt-caret:hover{ color:var(--ink); background:var(--surface-raised); }
-.tt-caret:focus-visible{ outline:2px solid var(--blue); outline-offset:1px; }
-.tt-caret.placeholder{ cursor:default; }
+html[data-theme="dark"] .pt-sub > td,
+html[data-theme="dark"] .pt-addrow > td,
+html[data-theme="dark"] .pt-sub-empty{ background:#0E1420; }
+html[data-theme="dark"] .pt-sub:hover > td{ background:#141B2A; }
 
-.tt-check{
-  width:18px; height:18px; padding:0; border-radius:5px; cursor:pointer;
-  border:1.5px solid var(--border-strong); background:var(--surface);
-  display:inline-flex; align-items:center; justify-content:center; color:transparent;
-}
-.tt-check svg{ width:11px; height:11px; }
-.tt-check.on{ background:var(--good); border-color:var(--good); color:var(--ink-on-color); }
-.tt-check:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
-
-.tt-name{ min-width:0; display:flex; align-items:center; gap:7px; }
-.tt-detached{
-  font-size:9.5px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
-  padding:1px 5px; border-radius:5px; background:var(--warning-bg); color:var(--warning-ink);
-  white-space:nowrap;
-}
-.tt-dates{ display:flex; align-items:center; gap:4px; min-width:0; font-variant-numeric:tabular-nums; }
-.tt-dash{ color:var(--ink-muted); font-size:10px; flex:0 0 auto; }
-.tt-assign, .tt-prio, .tt-status{ min-width:0; }
-.tt-res{ min-width:0; font-size:11.5px; }
-.tt-res-link{ color:var(--blue-on-field); text-decoration:none; }
-.tt-res-link:hover{ text-decoration:underline; }
-.tt-res-none{ color:var(--ink-muted); }
-
-/* Per-node rollup: the same leaf counts the project bar reads. */
-.tt-roll{ min-width:0; }
-.tt-roll-inner{ display:flex; align-items:center; gap:6px; }
-.tt-roll-bar{ flex:1 1 auto; height:4px; border-radius:999px; background:var(--border); overflow:hidden; min-width:28px; }
-.tt-roll-bar span{ display:block; height:100%; border-radius:999px; background:var(--blue); transition:width 220ms ease; }
-.tt-roll-bar span.done{ background:var(--good); }
-.tt-roll-num{ font-size:10.5px; color:var(--ink-muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
-
-.tt-del{
-  width:20px; height:20px; padding:0; border:none; background:none; cursor:pointer;
-  color:var(--ink-muted); border-radius:5px; font-size:12px; line-height:1; opacity:0;
-  transition:opacity 120ms ease;
-}
-.tt-row:hover .tt-del, .tt-del:focus-visible{ opacity:1; }
-.tt-del:hover{ color:var(--critical); background:var(--critical-bg); }
-
-.tt-head-right{ margin-left:auto; display:flex; align-items:center; gap:12px; }
-.tt-depth-note{ color:var(--ink-muted); font-weight:600; letter-spacing:0; text-transform:none; }
-
-.tt-add-wrap{ padding-left:calc(var(--tt-depth, 0) * 22px + 4px); padding-top:6px; }
-.tt-add-open{
-  display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600;
-  color:var(--ink-muted); background:none; border:1px dashed var(--border-strong);
-  border-radius:7px; padding:5px 10px; cursor:pointer;
-}
-.tt-add-open svg{ width:12px; height:12px; }
-.tt-add-open:hover{ color:var(--ink); border-color:var(--ink-muted); background:var(--surface); }
-.tt-add-open:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
-.tt-add{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding-top:2px; }
-.tt-add input, .tt-add select{
-  font:inherit; font-size:12px; padding:5px 8px; border-radius:7px;
-  border:1px solid var(--border-strong); background:var(--surface); color:var(--ink);
-}
-.tt-add input:focus, .tt-add select:focus{ outline:2px solid var(--blue); outline-offset:1px; }
-.tt-add-name{ flex:1 1 220px; min-width:0; }
-.tt-add-error{ font-size:11.5px; color:var(--critical); flex-basis:100%; }
-
-/* ---- phone: the row becomes a wrapping strip, the indent survives ---- */
-@media (max-width:900px){
-  /* Grid areas can't hold five different elements in one slot, so the row
-     switches to a wrapping flex line: name and controls on top, the metadata
-     chips flowing underneath at whatever width there is. */
-  .tt-row{
-    display:flex; flex-wrap:wrap; align-items:center; gap:8px;
-    padding-left:calc(var(--tt-depth, 0) * 14px + 4px);
-  }
-  .tt-rail{ left:calc(var(--tt-depth, 0) * 14px - 6px); }
-  .tt-add-wrap{ padding-left:calc(var(--tt-depth, 0) * 14px + 4px); }
-  .tt-name{ flex:1 1 140px; }
-  .tt-del{ opacity:1; margin-left:auto; }
-  .tt-dates{ flex:1 1 100%; order:5; }
-  .tt-assign{ order:6; }
-  .tt-prio{ order:7; }
-  .tt-status{ order:8; }
-  .tt-res{ order:9; }
-  .tt-roll{ order:10; flex:1 1 90px; }
+/* The section header, two lines: what kind of work, then whose. */
+.pt-section-eyebrow{
+  display:block; font-size:10px; font-weight:650; letter-spacing:0.06em;
+  text-transform:uppercase; color:var(--ink-muted); margin-bottom:2px;
 }

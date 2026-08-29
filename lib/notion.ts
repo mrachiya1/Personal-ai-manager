@@ -543,6 +543,7 @@ async function _getTasks(): Promise<Task[]> {
       assignedTo: relationIds(p.properties, "Assigned To"),
       files: files(p.properties, "Files").map((f) => ({ name: f.name, url: f.url })),
       thumbnail: thumbs[0] ? { name: thumbs[0].name, url: thumbs[0].url } : undefined,
+      lastEditedTime: p.last_edited_time,
     };
   });
 }

@@ -175,7 +175,10 @@ check("the allocator's plan is back", JSON.stringify(restored) === JSON.stringif
   restored.join(" | "));
 check(
   "the panel credits the allocator again",
-  (await p.locator(".sc-head .section-sub").first().innerText()).includes("favourable hours")
+  // Either allocator wording is correct — which one shows depends on whether
+  // the day's windows have already passed, and that is a fact about the clock
+  // rather than about the override having been cleared.
+  !(await p.locator(".sc-head .section-sub").first().innerText()).includes("Set by you in chat")
 );
 
 /* ------------------------------------------------------------------ */

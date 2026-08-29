@@ -126,6 +126,8 @@ export function buildRows(input: {
 /* ================================================================== */
 
 export interface ProjectSection {
+  /** Small line above the title — "Client project" over "Company Orextic". */
+  eyebrow?: string;
   key: string;
   title: string;
   subtitle: string;
@@ -152,8 +154,11 @@ export function sectionise(rows: ProjectRow[], companies: Company[]): ProjectSec
       const mine = client.filter((r) => r.project.companyId === company.id);
       return {
         key: `company:${company.id}`,
-        // Prefixed so the two kinds of section read as different kinds at a
-        // glance rather than as two company names, one of which is odd.
+        // Two lines rather than one prefixed string: the kind of work is the
+        // eyebrow and the company is the title, so a run of company sections
+        // reads as a list of companies instead of a list of sentences that all
+        // start with the same two words.
+        eyebrow: "Client project",
         title: `Company ${company.name}`,
         subtitle: `${mine.length} client ${mine.length === 1 ? "project" : "projects"} · ${
           new Set(mine.map((r) => r.client!.id)).size
@@ -171,6 +176,7 @@ export function sectionise(rows: ProjectRow[], companies: Company[]): ProjectSec
   if (orphans.length) {
     sections.push({
       key: "company:none",
+      eyebrow: "Client project",
       title: "No company set",
       subtitle: `${orphans.length} client ${orphans.length === 1 ? "project" : "projects"} not filed under a company`,
       kind: "client",

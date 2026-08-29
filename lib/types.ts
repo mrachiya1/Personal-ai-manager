@@ -109,6 +109,8 @@ export interface Task {
   files: AttachedFile[];
   /** The preview image stored in Notion, when there is one. */
   thumbnail?: AttachedFile;
+  /** Notion's own stamp, so "Updated" on a sub-row is a fact, not a guess. */
+  lastEditedTime?: string;
 }
 
 export interface AttachedFile {

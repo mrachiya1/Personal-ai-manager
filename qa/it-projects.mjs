@@ -61,15 +61,15 @@ console.log("\n--- EXPAND A PROJECT (nested tasks) ---");
 const caret = p.locator(".pt-row .pt-caret").first();
 await caret.click();
 await p.waitForTimeout(500);
-console.log("  detail rows:", await p.locator(".pt-detail-row").count(), "task rows:", await p.locator(".tt-row").count());
-console.log("  head:", await p.locator(".pt-detail-head").first().innerText().catch(() => "-"));
+console.log("  sub-task rows:", await p.locator("tr.pt-sub").count(), "· add rows:", await p.locator("tr.pt-addrow").count());
+console.log("  deepest level shown:", await p.locator("tr.pt-sub").last().getAttribute("data-depth").catch(() => "-"));
 
 console.log("\n--- PROGRESS BARS ---");
 const widths = await p.locator(".pt-progress i").evaluateAll((els) => els.slice(0, 5).map((e) => e.style.width));
 console.log("  first five:", widths.join(" "));
 
 console.log("\n--- SUB-TASK TOGGLE recalculates progress ---");
-const task = p.locator(".tt-row .tt-check").first();
+const task = p.locator("tr.pt-sub .pt-check.sub").first();
 if (await task.count()) {
   const wBefore = await p.locator(".pt-progress i").first().evaluate((e) => e.style.width);
   const n = sent.length;
@@ -158,24 +158,24 @@ console.log("\n--- NEXT TASK IS CLICKABLE ---");
 {
   const next = p.locator(".pt-next").first();
   if (await next.count()) {
-    const openBefore = await p.locator(".pt-detail-row").count();
+    const openBefore = await p.locator("tr.pt-sub").count();
     await next.click();
     await p.waitForTimeout(400);
-    console.log(`  clicking it expanded the row: ${openBefore} -> ${await p.locator(".pt-detail-row").count()} detail rows`);
+    console.log(`  clicking it expanded the row: ${openBefore} -> ${await p.locator("tr.pt-sub").count()} sub-task rows`);
   } else console.log("  no next-task button on screen");
 }
 
 console.log("\n--- INLINE ADD TASK ---");
 {
-  const opener = p.locator(".tt-add-open").first();
+  const opener = p.locator(".pt-add-open").first();
   if (await opener.count()) {
     await opener.click();
     await p.waitForTimeout(300);
-    const fields = await p.locator(".tt-add input, .tt-add select").count();
-    await p.locator(".tt-add-name").first().fill("QA milestone");
-    await p.locator(".tt-add-date").first().fill("2026-09-15");
+    const fields = await p.locator("tr.pt-addrow.open input, tr.pt-addrow.open select").count();
+    await p.locator("tr.pt-addrow.open td.pt-addrow-name input").first().fill("QA milestone");
+    await p.locator('tr.pt-addrow.open input[type="date"]').last().fill("2026-09-15");
     const n = sent.length;
-    await p.locator('.tt-add button[type="submit"]').first().click();
+    await p.locator('tr.pt-addrow.open .pt-inline-actions button').first().click();
     await p.waitForTimeout(1500);
     console.log(`  fields: ${fields} · sent: ${sent.slice(n).join(" | ") || "NOTHING"}`);
   } else console.log("  add-task button missing");
@@ -228,9 +228,14 @@ console.log("\n--- ADD PROPERTY POPOVER ---");
 {
   // The first button in the DOM can belong to a section this run collapsed
   // earlier, or to a project the stand-in has since persisted — either way it
-  // is legitimately not clickable. Take the first one actually on screen.
-  await p.keyboard.press("Escape");
-  await p.waitForTimeout(300);
+  // is legitimately not clickable. Take the first one actually on screen, and
+  // close any editable-cell popover first: its backdrop covers the whole page
+  // and swallows the click, which reads as "the button is broken".
+  // A reload rather than a hunt for whatever overlay is open: earlier blocks
+  // leave editable-cell popovers behind, and their full-screen backdrop
+  // swallows this click in a way that reads as "the button is broken".
+  await p.reload({ waitUntil: "networkidle" });
+  await p.waitForTimeout(400);
   await p.locator(".ap-btn:visible").first().click();
   await p.waitForTimeout(350);
   const types = await p.locator(".ap-type-name").allInnerTexts();
