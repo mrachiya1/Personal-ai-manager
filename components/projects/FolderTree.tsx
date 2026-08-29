@@ -78,7 +78,7 @@ export default function FolderTree({
                 <Caret open={isOpen(key)} />
                 <span
                   className="nav-swatch"
-                  style={{ background: companyColor(cid) ? `var(${companyColor(cid)})` : "var(--ink-muted)" }}
+                  style={{ ["--swatch-color" as string]: companyColor(cid) ? `var(${companyColor(cid)})` : "var(--ink-muted)" }}
                 />
                 <span className="pw-tree-label">{companyName(cid)}</span>
                 <span className="count-chip">{total}</span>

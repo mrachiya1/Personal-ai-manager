@@ -150,7 +150,7 @@ export function NotionConnectCard({
           <ol style={{ margin: "10px 0 14px 0", paddingLeft: 18, fontSize: 12.5, lineHeight: 1.75, color: "var(--ink-secondary)" }}>
             <li>
               Open{" "}
-              <a href="https://www.notion.so/my-integrations" target="_blank" rel="noreferrer" style={{ color: "var(--blue)", textDecoration: "underline" }}>
+              <a href="https://www.notion.so/my-integrations" target="_blank" rel="noreferrer" className="inline-link">
                 notion.so/my-integrations
               </a>{" "}
               → <strong>New integration</strong> → pick your workspace → Submit.
@@ -283,11 +283,10 @@ export function DatabaseMappingCard({ rows }: { rows: DbRow[] }) {
                   onChange={(e) => setValues((v) => ({ ...v, [r.key]: e.target.value }))}
                   placeholder="database id or URL"
                   spellCheck={false}
-                  style={{
-                    flex: 1, minWidth: 200, border: "1px solid var(--border)", borderRadius: 8,
-                    padding: "6px 10px", fontSize: 12, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                    background: "var(--surface-raised)", color: "var(--ink)",
-                  }}
+                  // A class, not an inline style: inline beats every rule in
+                  // the stylesheet, which is how this one field ended up the
+                  // only text input in the app on a different surface.
+                  className="db-id-input"
                 />
                 <div style={{ width: 190, flexShrink: 0, fontSize: 11 }}>
                   {check ? (

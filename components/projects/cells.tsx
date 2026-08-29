@@ -378,7 +378,7 @@ export function MultiPickCell({
           )}
           {visible.map((o) => (
             <button key={o.id} className={`pw-opt${selected.includes(o.id) ? " on" : ""}`} onClick={() => toggle(o.id)}>
-              {o.color && <span className="nav-swatch" style={{ background: o.color, width: 16, height: 16 }} />}
+              {o.color && <span className="nav-swatch" style={{ ["--swatch-color" as string]: o.color, width: 16, height: 16 }} />}
               <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{o.label}</span>
               <Tick />
             </button>

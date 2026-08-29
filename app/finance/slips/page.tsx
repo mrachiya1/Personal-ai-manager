@@ -16,7 +16,7 @@ export default async function SlipsPage() {
       <div className="topbar">
         <div>
           <div className="eyebrow">
-            <Link href="/finance" style={{ color: "inherit" }}>Finance</Link> · Slip Inbox
+            <Link href="/finance" className="crumb-link">Finance</Link> · Slip Inbox
           </div>
           <h1 className="brand-serif">Slip Inbox</h1>
         </div>

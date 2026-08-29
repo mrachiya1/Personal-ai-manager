@@ -1,5 +1,7 @@
 "use client";
 
+import { signOut } from "next-auth/react";
+
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -392,7 +394,7 @@ export default function Sidebar({
                   <div className={`nav-group-body${collapsed.workspaces ? " hidden" : ""}`}>
                     {workspaces.slice(0, 8).map((w) => (
                       <Link key={w.id} href={w.href} className={`nav-item${pathname === w.href ? " active" : ""}`}>
-                        <span className="nav-swatch" style={{ background: `var(${w.colorVar})` }}>
+                        <span className="nav-swatch" style={{ ["--swatch-color" as string]: `var(${w.colorVar})` }}>
                           {initials(w.name)}
                         </span>
                         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -423,13 +425,26 @@ export default function Sidebar({
           <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle dark mode">
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>
+          {/*
+            A button that signs out, not a link to Auth.js's own signout page.
+            That page is an unstyled confirmation form outside this app's
+            design, and — worse — landing on it does not end the session:
+            someone who clicks "sign out" and walks away is still signed in.
+            One click, one outcome.
+          */}
           {authEnabled && (
-            <a className="ws-action" href="/api/auth/signout" title="Sign out" aria-label="Sign out">
+            <button
+              className="ws-action"
+              type="button"
+              title="Sign out"
+              aria-label="Sign out"
+              onClick={() => signOut({ callbackUrl: "/login" })}
+            >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <path d="m16 17 5-5-5-5M21 12H9" />
               </svg>
-            </a>
+            </button>
           )}
         </div>
       </aside>
@@ -545,7 +560,7 @@ function CommandPalette({
                 }}
               >
                 {r.color ? (
-                  <span className="nav-swatch" style={{ background: `var(${r.color})` }}>{initials(r.label)}</span>
+                  <span className="nav-swatch" style={{ ["--swatch-color" as string]: `var(${r.color})` }}>{initials(r.label)}</span>
                 ) : (
                   <span className="nav-swatch" style={{ background: "var(--border-strong)" }} />
                 )}

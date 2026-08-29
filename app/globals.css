@@ -20,7 +20,14 @@
   --surface-raised:#fdfbf6;
   --ink:#26231d;
   --ink-secondary:#57534a;
-  --ink-muted:#847e72;
+  /* Measured, not chosen. This colour carries every small label on every
+     card — "Total Clients", "Rahu Kalam", the sidebar's section headings —
+     and at 3.26:1 on a light card it was under AA on all seventeen routes.
+     #706a5e cleared the card surfaces but not --field (#eae7df), which is
+     where every input, search box and the login page's own background sit:
+     4.34:1 there. #6d675b is the first value that clears 4.5:1 on ALL four
+     light surfaces — 4.54:1 on --field, 5.43:1 on --surface-raised. */
+  --ink-muted:#6d675b;
   --border:rgba(38,35,29,0.09);
   --border-strong:rgba(38,35,29,0.16);
 
@@ -205,12 +212,12 @@ a{ color:inherit; text-decoration:none; }
 .plan-block + .plan-block{ margin-top:18px; }
 .plan-heading{ display:flex; align-items:center; gap:7px; font-size:12px; font-weight:700; letter-spacing:0.02em; margin-bottom:10px; }
 .plan-heading.do{ color:var(--good-ink); }
-.plan-heading.avoid{ color:#9c5b12; }
+.plan-heading.avoid{ color:var(--warning-ink); }
 .plan-item{ display:flex; gap:11px; padding:10px 0; border-top:1px solid var(--border); }
 .plan-block .plan-item:first-of-type{ border-top:none; padding-top:0; }
 .plan-icon{ width:20px;height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
 .plan-icon.good{ background:var(--good-bg); color:var(--good-ink); }
-.plan-icon.warn{ background:var(--warning-bg); color:#9c5b12; }
+.plan-icon.warn{ background:var(--warning-bg); color:var(--warning-ink); }
 .plan-icon svg{ width:11px; height:11px; }
 .plan-text .title{ font-size:13.5px; font-weight:600; }
 .plan-text .reason{ font-size:12px; color:var(--ink-muted); margin-top:2px; line-height:1.5; }
@@ -229,17 +236,21 @@ table.mini tr:last-child td{ border-bottom:none; }
 
 .badge{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; }
 .badge.high{ background:var(--critical-bg); color:var(--critical-ink); }
-.badge.med{ background:var(--warning-bg); color:#9c5b12; }
+/* --warning-ink, not a literal. #9c5b12 is the light-theme amber; on a dark
+   tint it measured 2.41:1, which is where "Pending" and "Medium" were
+   unreadable on every page outside the Projects tables. The token flips with
+   the theme; the literal could not. */
+.badge.med{ background:var(--warning-bg); color:var(--warning-ink); }
 .badge.low{ background:var(--good-bg); color:var(--good-ink); }
 .badge.overdue{ background:var(--critical-bg); color:var(--critical-ink); }
 .badge.paid{ background:var(--good-bg); color:var(--good-ink); }
-.badge.pending{ background:var(--warning-bg); color:#9c5b12; }
+.badge.pending{ background:var(--warning-bg); color:var(--warning-ink); }
 
 /* ---------- Bottom row (Today) ---------- */
 .grid-3{ display:grid; grid-template-columns: repeat(3, 1fr); gap:16px; }
 .capture-input{
   display:flex; align-items:center; gap:8px; border:1px solid var(--border-strong); border-radius:var(--radius-sm);
-  padding:10px 12px; background:var(--surface-raised); margin-bottom:12px;
+  padding:10px 12px; background:var(--field); margin-bottom:12px;
 }
 .capture-input input{ border:none; outline:none; background:transparent; font-size:13px; width:100%; color:var(--ink); font-family:inherit; }
 .capture-input input::placeholder{ color:var(--ink-muted); }
@@ -313,7 +324,7 @@ table.mini tr:last-child td{ border-bottom:none; }
 .filter-row{ display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
 .search-box{
   display:flex; align-items:center; gap:8px; border:1px solid var(--border-strong); border-radius:999px;
-  padding:8px 14px; background:var(--surface-raised); flex:1; min-width:220px; max-width:320px;
+  padding:8px 14px; background:var(--field); flex:1; min-width:220px; max-width:320px;
 }
 .search-box input{ border:none; outline:none; background:transparent; font-size:13px; width:100%; color:var(--ink); font-family:inherit; }
 .search-box input::placeholder{ color:var(--ink-muted); }
@@ -341,7 +352,9 @@ table.mini tr:last-child td{ border-bottom:none; }
 .company-dot{ width:7px; height:7px; border-radius:50%; flex-shrink:0; }
 
 .tag{ font-size:10px; font-weight:700; letter-spacing:0.02em; text-transform:uppercase; padding:2px 6px; border-radius:5px; }
-.tag.vip{ background:#f5e9d0; color:var(--warning-ink); }
+/* A literal light-theme cream that never flipped: --warning-ink on it read
+   1.52:1 in dark. Same defect as the badges, same fix — the token pair. */
+.tag.vip{ background:var(--warning-bg); color:var(--warning-ink); }
 .tag.active{ background:var(--good-bg); color:var(--good-ink); }
 .tag.lead{ background:#e7ecfa; color:#2a4fae; }
 .tag.past{ background:#efeee7; color:var(--ink-muted); }
@@ -425,7 +438,11 @@ html[data-theme="dark"]{
   --surface-raised:#201d19;
   --ink:#e7e1d5;
   --ink-secondary:#b0a898;
-  --ink-muted:#8a8375;
+  /* Same story as the light token, one surface deeper. #8c8577 cleared
+     --surface-raised at 4.58:1 but landed at 4.43:1 on --field (#242019) —
+     the input and login-shell background. #8f8879 clears every dark surface:
+     4.60:1 on --field, 5.27:1 on --page. */
+  --ink-muted:#8f8879;
   --border:rgba(255,255,255,0.07);
   --border-strong:rgba(255,255,255,0.14);
 
@@ -488,11 +505,39 @@ html[data-theme="dark"] .idea-tag{ background:#242019; }
 .modal .modal-sub{ font-size:12.5px; color:var(--ink-muted); margin-bottom:18px; }
 .form-field{ margin-bottom:14px; }
 .form-field label{ display:block; font-size:11.5px; font-weight:600; color:var(--ink-muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.03em; }
+/*
+  One text field, everywhere.
+
+  A bare <input> had no base treatment, so each screen styled its own and the
+  same control came out transparent on Clients and Ideas, --surface on
+  Projects and Sleep, and --surface-raised on Settings. Three colours for one
+  thing is what "the colours don't match" looks like from the outside. The
+  base sets the recessed field colour and a hairline; components that need
+  something else (the inline table editors, the quick-capture bar) carry a
+  class and still win on specificity.
+*/
+/* Not `:where()` — that has zero specificity, so the default never won and
+   every screen's own rule kept overriding it with a different token. A base
+   style has to be able to hold the line; a component that genuinely needs
+   something else carries a class and beats this on specificity anyway. */
+input[type="text"], input[type="email"], input[type="password"], input[type="search"],
+input[type="url"], input[type="tel"], input[type="number"], input[type="date"],
+input[type="time"], input:not([type]), select, textarea{
+  background:var(--field);
+  color:var(--ink);
+  border:1px solid var(--border-strong);
+  border-radius:9px;
+  font-family:inherit;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible{
+  outline:2px solid var(--blue); outline-offset:1px;
+}
+
 .form-field input,
 .form-field select,
 .form-field textarea{
   width:100%; border:1px solid var(--border-strong); border-radius:10px; padding:9px 12px; font-size:13.5px;
-  font-family:inherit; color:var(--ink); background:var(--surface); outline:none;
+  font-family:inherit; color:var(--ink); background:var(--field); outline:none;
 }
 .form-field input:focus,
 .form-field select:focus,
@@ -680,7 +725,13 @@ body{ background:var(--field); }
   flex:1; min-width:0; max-width:none;
   padding:24px 30px 56px 30px;
   background:var(--canvas);
-  overflow-x:hidden;
+  /*
+    `overflow-x:hidden` was here to stop a wide table pushing the page
+    sideways. It also clipped every popover that opened near the right edge
+    or below the fold — the same class of bug as the section card, one level
+    up. Nothing needs it now that the tables are held to their frame, and
+    `clip` on one axis alone would establish the same clipping ancestor.
+  */
 }
 
 /* ---------- Workspace card ---------- */
@@ -769,10 +820,26 @@ html[data-theme="dark"] .nav-item:hover{ background:rgba(255,255,255,0.05); }
 }
 
 /* A project/company row: colour-coded square instead of a line icon. */
+/*
+  A tint of the company's colour, with the colour itself as the ink.
+
+  Solid accent with white lettering measured 2.32:1 — the initials were
+  effectively decoration. Nothing sits at 4.5:1 on a mid-tone accent, in
+  either direction, so the recipe inverts: the accent becomes a quiet
+  background and the ink is the accent darkened enough to read on it. Same
+  three-part recipe as the status badges, so the two read as one system.
+
+  --swatch-color is set inline from the company's own colour token.
+*/
 .nav-swatch{
   width:17px; height:17px; border-radius:5px; flex-shrink:0;
   display:flex; align-items:center; justify-content:center;
-  color:var(--accent-ink); font-size:8.5px; font-weight:700; letter-spacing:-0.02em;
+  font-size:8.5px; font-weight:700; letter-spacing:-0.02em;
+  background:color-mix(in srgb, var(--swatch-color, var(--blue)) 14%, transparent);
+  color:color-mix(in srgb, var(--swatch-color, var(--blue)) 55%, #000);
+}
+html[data-theme="dark"] .nav-swatch{
+  color:var(--swatch-color, var(--blue));
 }
 .nav-swatch svg{ width:10px; height:10px; }
 
@@ -815,13 +882,35 @@ html[data-theme="dark"] .nav-item:hover{ background:rgba(255,255,255,0.05); }
   display:flex; align-items:center; gap:26px;
   border-bottom:1px solid var(--border); margin-bottom:20px;
 }
+/*
+  Inline links inside body copy get a hit box without moving anything on the
+  screen — padding plus an equal negative margin, so the box model is honest
+  and the text stays where it was. The audit found five links under the 24px
+  minimum; a 14px-tall target is a miss on a laptop and a guess on a tablet.
+*/
+.card a:not(.btn-primary):not(.btn-ghost):not([class]),
+.stat-card a:not([class]),
+a.proj-client{
+  display:inline-block; padding:5px 0; margin:-5px 0;
+}
+/* Two named inline links, given the same honest hit box: padding plus an
+   equal negative margin, so nothing moves on screen. */
+.db-id-input{
+  flex:1; min-width:200px; padding:6px 10px; font-size:12px;
+  font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.crumb-link{ color:inherit; display:inline-block; padding:5px 2px; margin:-5px -2px; }
+.inline-link{
+  color:var(--blue); text-decoration:underline; text-underline-offset:2px;
+  display:inline-block; padding:5px 2px; margin:-5px -2px;
+}
 .page-tab{
-  display:inline-flex; align-items:center; gap:7px; padding:10px 1px 11px 1px;
-  font-size:12.8px; font-weight:550; color:var(--ink-muted);
+  display:inline-flex; align-items:center; gap:7px; padding:10px 12px 11px 12px;
+  font-size:12.8px; font-weight:550; color:var(--ink-secondary);
   border-bottom:2px solid transparent; margin-bottom:-1px; cursor:pointer;
   background:none; border-top:none; border-left:none; border-right:none; font-family:inherit;
 }
-.page-tab:hover{ color:var(--ink-secondary); }
+.page-tab:hover{ color:var(--ink); }
 .page-tab.active{ color:var(--ink); border-bottom-color:var(--ink); font-weight:600; }
 .page-tab svg{ width:14px; height:14px; opacity:0.75; }
 .page-tab.active svg{ opacity:1; }
@@ -847,7 +936,10 @@ html[data-theme="dark"] .nav-item:hover{ background:rgba(255,255,255,0.05); }
 .panel-head .panel-title{ font-size:13.5px; font-weight:600; letter-spacing:-0.01em; }
 .count-chip{
   display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:600;
-  color:var(--ink-muted); background:var(--rail); border:1px solid var(--border);
+  /* Secondary, not muted: a count is content, and --ink-muted on the chip's
+     own lighter ground came in at 4.25:1 — the label colour was being asked
+     to work on a surface it was never measured against. */
+  color:var(--ink-secondary); background:var(--rail); border:1px solid var(--border);
   border-radius:6px; padding:2px 6px; font-variant-numeric:tabular-nums;
 }
 .count-chip svg{ width:10px; height:10px; }
@@ -1420,7 +1512,9 @@ table.dt.pw-table .avatar-stack .av{ width:21px; height:21px; }
   border:1px solid var(--border); background:var(--surface);
   display:grid; gap:2px;
 }
-.sw-tag{ font-size:10px; font-weight:650; letter-spacing:0.05em; text-transform:uppercase; color:var(--aqua); }
+/* --aqua is tuned as a chart fill and a large-text accent; at 10px on a light
+   card it is 3.99:1. The -ink variant is the same hue at reading contrast. */
+.sw-tag{ font-size:10px; font-weight:650; letter-spacing:0.05em; text-transform:uppercase; color:var(--good-ink); }
 .sw-time{
   font-size:14px; font-weight:650; letter-spacing:-0.02em;
   font-variant-numeric:tabular-nums; color:var(--ink); white-space:nowrap;
@@ -1711,7 +1805,7 @@ a.goal-row .goal-top{ display:flex; align-items:baseline; gap:10px; margin-botto
 }
 .sm-field input{
   width:100%; min-height:38px; padding:0 11px; border-radius:9px;
-  border:1px solid var(--border-strong); background:var(--surface);
+  border:1px solid var(--border-strong); background:var(--field);
   font:inherit; font-size:13px; color:var(--ink);
 }
 .sm-field input:focus{ outline:2px solid var(--blue); outline-offset:1px; }
@@ -1866,7 +1960,7 @@ html[data-theme="dark"]{
 .pt-filters{ margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .pt-search, .pt-status-filter{
   min-height:34px; padding:0 11px; border-radius:9px;
-  border:1px solid var(--border-strong); background:var(--surface);
+  border:1px solid var(--border-strong); background:var(--field);
   font:inherit; font-size:12.5px; color:var(--ink);
 }
 .pt-search{ width:270px; max-width:100%; }
@@ -2017,7 +2111,9 @@ html[data-theme="dark"]{
 /* A cell with no inline editor in it has no popover to clip, so it can hold
    its own content — which is what stops "Check here" printing across the
    budget figure in the column beside it. */
-.pt-table td:not(:has(.ed-cell)){ overflow:hidden; }
+/* A cell that hosts an editor or a menu must not clip — both open panels
+   anchored inside it. Everything else can truncate. */
+.pt-table td:not(:has(.ed-cell)):not(:has(.pt-menu-wrap)){ overflow:hidden; }
 .pt-res, .pt-res-link{ max-width:100%; overflow:hidden; text-overflow:ellipsis; display:inline-flex; }
 .pt-row > td{ vertical-align:top; }
 .pt-row:hover > td{ background:var(--rail); }
@@ -2074,7 +2170,7 @@ html[data-theme="dark"]{
 .pt-res:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; border-radius:4px; }
 .pt-res-count{
   font-size:9.5px; font-weight:700; padding:0 4px; border-radius:999px;
-  background:var(--field); color:var(--ink-muted);
+  background:var(--field); color:var(--ink-secondary);
 }
 
 /* The progress line: its own row so it can span the table without fighting
@@ -2329,7 +2425,7 @@ html[data-theme="dark"]{
 .pt-res-count{
   min-width:16px; height:16px; padding:0 4px; border-radius:8px;
   background:var(--field); font-size:10px; font-weight:650;
-  display:inline-grid; place-items:center; color:var(--ink-muted);
+  display:inline-grid; place-items:center; color:var(--ink-secondary);
 }
 
 /* ---------- inline add-task ---------- */
@@ -2402,7 +2498,10 @@ html[data-theme="dark"]{
 .auth-tabs:has(> :only-child){ grid-template-columns:1fr; }
 .auth-tab{
   min-height:32px; border:none; border-radius:9px; background:none;
-  font:inherit; font-size:12.5px; font-weight:600; color:var(--ink-muted); cursor:pointer;
+  /* The inactive tab is a control, not a caption — muted put "Sign up" at
+     4.34:1 on the tab strip, which is the one word a new visitor is looking
+     for. */
+  font:inherit; font-size:12.5px; font-weight:600; color:var(--ink-secondary); cursor:pointer;
   transition:background .12s, color .12s;
 }
 .auth-tab:hover{ color:var(--ink); }
@@ -2796,15 +2895,14 @@ html[data-theme="dark"] .btn-danger:hover:not(:disabled){ filter:brightness(1.1)
 }
 .pt-table thead th{ background:none; }
 
-html[data-theme="dark"]{
-  --projects-ink: #e8ecf3;
-  --projects-ink-2: #b6becd;
-  --projects-ink-3: #7c8698;
-}
 html[data-theme="dark"] .pt-section{
-  --ink:var(--projects-ink);
-  --ink-secondary:var(--projects-ink-2);
-  --ink-muted:var(--projects-ink-3);
+  /*
+    Surfaces and borders only. This block used to override the ink tokens as
+    well, with a cooler grey — which made a count chip one colour on Settings
+    and another on Projects, and a caption warm on every page but this one.
+    One screen quietly running its own type palette is what "the colours
+    don't match" means; the surface can differ, the ink cannot.
+  */
   --border:rgba(255,255,255,0.04);
   --border-strong:rgba(255,255,255,0.10);
   --field:rgba(255,255,255,0.012);
@@ -2815,7 +2913,7 @@ html[data-theme="dark"] .pt-section{
 }
 /* Hairline dividers and a hover felt more than seen. A row highlight heavy
    enough to notice on its own turns twenty rows into twenty surfaces. */
-html[data-theme="dark"] .pt-table thead th{ border-bottom:1px solid rgba(255,255,255,0.06); color:#7c8698; }
+html[data-theme="dark"] .pt-table thead th{ border-bottom:1px solid rgba(255,255,255,0.06); color:var(--ink-muted); }
 html[data-theme="dark"] .pt-row > td{ border-top:1px solid rgba(255,255,255,0.05); background:transparent; }
 html[data-theme="dark"] .pt-row:hover > td,
 html[data-theme="dark"] .pt-row.open > td{ background:rgba(255,255,255,0.02); }
@@ -2829,33 +2927,36 @@ html[data-theme="dark"] .pt-progress{ background:rgba(255,255,255,0.06); }
 html[data-theme="dark"] .pt-branch{ border-color:rgba(255,255,255,0.14); }
 
 /* ---- badges: a tinted fill, a bright label, a matching hairline ----
-   One recipe for every state, so a status and a priority read as the same
-   kind of object and only the hue carries the meaning. */
-html[data-theme="dark"] .pt-section .badge,
-html[data-theme="dark"] .pt-section .prio{ border:1px solid transparent; font-weight:600; }
-html[data-theme="dark"] .pt-section .badge.paid{
+   One recipe for every state and, since this round, for every page. It was
+   scoped to the Projects tables, which meant "Delivered" was one green there
+   and a different green on Clients, Payments and Finance — two colours for
+   one meaning, four routes apart. Only the hue carries the meaning now; the
+   construction is identical everywhere. */
+html[data-theme="dark"] .badge,
+html[data-theme="dark"] .prio{ border:1px solid transparent; font-weight:600; }
+html[data-theme="dark"] .badge.paid{
   background:rgba(16,185,129,0.10); color:#34d399; border-color:rgba(16,185,129,0.20);
 }
-html[data-theme="dark"] .pt-section .badge.med{
+html[data-theme="dark"] .badge.med{
   background:rgba(245,158,11,0.10); color:#fbbf24; border-color:rgba(245,158,11,0.20);
 }
-html[data-theme="dark"] .pt-section .badge.high{
+html[data-theme="dark"] .badge.high{
   background:rgba(14,165,233,0.10); color:#38bdf8; border-color:rgba(14,165,233,0.22);
 }
-html[data-theme="dark"] .pt-section .badge.overdue{
+html[data-theme="dark"] .badge.overdue{
   background:rgba(244,63,94,0.10); color:#fb7185; border-color:rgba(244,63,94,0.20);
 }
-html[data-theme="dark"] .pt-section .badge.pending{
+html[data-theme="dark"] .badge.pending{
   background:rgba(39,39,42,0.9); color:#d4d4d8; border-color:rgba(63,63,70,0.5);
 }
-html[data-theme="dark"] .pt-section .prio.urgent,
-html[data-theme="dark"] .pt-section .prio.high{
+html[data-theme="dark"] .prio.urgent,
+html[data-theme="dark"] .prio.high{
   background:rgba(244,63,94,0.10); color:#fb7185; border-color:rgba(244,63,94,0.20);
 }
-html[data-theme="dark"] .pt-section .prio.medium{
+html[data-theme="dark"] .prio.medium{
   background:rgba(39,39,42,0.9); color:#d4d4d8; border-color:rgba(63,63,70,0.5);
 }
-html[data-theme="dark"] .pt-section .prio.low{
+html[data-theme="dark"] .prio.low{
   background:rgba(255,255,255,0.04); color:#8b94a5; border-color:rgba(255,255,255,0.07);
 }
 html[data-theme="dark"] .pt-section .pt-res,
