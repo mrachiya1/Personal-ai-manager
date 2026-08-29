@@ -113,6 +113,28 @@ check("no back-relation columns are rendered",
 check("the client column is gone, folded into the project cell",
   !colHeads.includes("Client") && (await rowFor("Brand Relaunch Film").locator(".pt-subline .pt-client").count()) === 1,
   colHeads.join(" | "));
+check("budget and payment are on the sub-line, not two columns",
+  !colHeads.includes("Budget") && !colHeads.includes("Payment") &&
+    (await rowFor("Brand Relaunch Film").locator(".pt-subline .pt-pay-dot").count()) === 1);
+check("custom properties are not columns",
+  !colHeads.includes("Invoiced") && !colHeads.includes("Staging URL"), colHeads.join(" | "));
+check("exactly the ten columns the spec names", colHeads.length === 10, `${colHeads.length}: ${colHeads.join(" | ")}`);
+
+/* ---- the seamless surface ---- */
+const surfaces = await p.$$eval(".pt-section", (els) =>
+  els.map((el) => {
+    const cs = getComputedStyle(el);
+    return { bg: cs.backgroundColor, border: cs.borderTopWidth, shadow: cs.boxShadow };
+  })
+);
+check("no section is a card — no background of its own",
+  surfaces.every((s2) => s2.bg === "rgba(0, 0, 0, 0)" || s2.bg === "transparent"),
+  surfaces.map((s2) => s2.bg).join(" | "));
+check("no section border or shadow",
+  surfaces.every((s2) => s2.border === "0px" && s2.shadow === "none"),
+  surfaces.map((s2) => `${s2.border}/${s2.shadow}`).join(" | "));
+check("the table itself is transparent",
+  (await p.$eval("table.pt-table", (t) => getComputedStyle(t).backgroundColor)) === "rgba(0, 0, 0, 0)");
 
 /* ------------------------------------------------------------------ */
 console.log("\n--- 2. SUB-TASKS SHARE THE PARENT'S COLUMN GRID ---");
@@ -213,10 +235,10 @@ check("client sections carry a 'Client project' eyebrow",
   heads.map((h) => `${h.eyebrow || "-"}/${h.title}`).join(" | "));
 check("the personal section has no client eyebrow",
   heads.some((h) => h.title === "Personal project" && !h.eyebrow));
-check("the personal table drops the client billing heading", await p.evaluate(() => {
+check("the personal section shows the same ten columns", await p.evaluate(() => {
   const sec = [...document.querySelectorAll(".pt-section")].find((s) => s.querySelector("h2")?.textContent?.includes("Personal"));
   const ths = [...sec.querySelectorAll("thead th")].map((t) => t.textContent.trim());
-  return ths.includes("Billing") && !ths.includes("Payment") && !ths.includes("Client");
+  return ths.length === 10 && !ths.includes("Client") && !ths.includes("Budget");
 }));
 
 /* ------------------------------------------------------------------ */
@@ -357,7 +379,12 @@ console.log("\n--- 12. DELETING A BRANCH TAKES ITS CHILDREN ---");
 await expandProject("Brand Relaunch Film");
 const target = subRow("Shot 01 Animation");
 await target.hover();
-await target.locator(".pt-sub-del").click();
+await target.locator(".pt-menu-btn").click();
+await p.waitForTimeout(250);
+check("the sub-task menu offers rename, add sub-task and delete",
+  (await p.locator(".ed-pop .ed-opt").allInnerTexts()).join(" | ").includes("Rename"),
+  (await p.locator(".ed-pop .ed-opt").allInnerTexts()).join(" | "));
+await p.locator(".ed-pop .ed-opt.danger").click();
 await p.waitForTimeout(1900);
 check("the toast names how many nested items went",
   /nested item/.test(await p.locator(".pt-toast").first().innerText().catch(() => "")),

@@ -148,10 +148,12 @@ console.log("\n--- FIGMA COLUMN DETAILS ---");
   console.log("  deadline cell    :", (await row.locator("td").nth(2).innerText()).replace(/\n/g, " "));
   console.log("  assignee dots    :", await p.locator(".pt-dot").count(), "· avatars:", await p.locator(".pt-assign .av").count());
   console.log("  resources link   :", (await p.locator(".pt-res").first().innerText()).trim());
-  console.log("  budget cell      :", (await p.locator(".pt-row").first().locator("td").nth(11).innerText()).trim());
-  console.log("  payment cell     :", (await p.locator(".pt-row").first().locator("td").nth(12).innerText()).trim());
+  // Budget and payment moved onto the project name's sub-line — ten columns,
+  // and neither of them is one.
+  console.log("  name sub-line    :", (await p.locator(".pt-row").first().locator(".pt-subline").innerText()).replace(/\n/g, " · "));
+  console.log("  payment state    :", await p.locator(".pt-row").first().locator(".pt-pay-dot").getAttribute("class"));
   console.log("  section titles   :", (await p.locator(".pt-section-title h2").allInnerTexts()).join(" | "));
-  console.log("  status badges    :", (await p.locator('[data-cell-col="6"] .badge').allInnerTexts()).join(", "));
+  console.log("  status badges    :", (await p.locator('.pt-row td[data-label="Status"] .badge').allInnerTexts()).join(", "));
 }
 
 console.log("\n--- NEXT TASK IS CLICKABLE ---");

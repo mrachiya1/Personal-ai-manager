@@ -13,6 +13,7 @@ import AddPropertyButton from "@/components/projects/AddPropertyButton";
 import CompletionFeedback from "@/components/projects/CompletionFeedback";
 import ConfirmDelete from "@/components/projects/ConfirmDelete";
 import ResourcesModal from "@/components/projects/ResourcesModal";
+import PropertiesModal from "@/components/projects/PropertiesModal";
 import { buildRows, computeMetrics, sectionise, type ProjectRow } from "@/lib/projectsAnalytics";
 import type { PickOption } from "@/components/projects/editable";
 
@@ -63,6 +64,15 @@ export default function ProjectsWorkspace({
   const [rows, setRows] = useState<Project[]>(projects);
   const [taskRows, setTaskRows] = useState<Task[]>(tasks);
   const [tab, setTab] = useState<Tab>("projects");
+  /**
+   * Which row's title the ··· menu asked to rename, and which branch it asked
+   * to add under. Both are one-shot hints rather than modes: the cell that
+   * matches takes it and clears it, so nothing stays "in rename state" if the
+   * row re-renders or the person clicks away.
+   */
+  const [renameKey, setRenameKey] = useState<string | null>(null);
+  const [addUnder, setAddUnder] = useState<{ projectId: string; parentTaskId?: string } | null>(null);
+  const [propertiesFor, setPropertiesFor] = useState<ProjectRow | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [toast, setToast] = useState<{ text: string; err?: boolean } | null>(null);
@@ -413,9 +423,16 @@ export default function ProjectsWorkspace({
       addTask,
       removeTask,
       thumbs,
+      renameKey,
+      clearRename: () => setRenameKey(null),
+      startRename: setRenameKey,
+      addUnder,
+      clearAdd: () => setAddUnder(null),
+      startAdd: (projectId: string, parentTaskId?: string) => setAddUnder({ projectId, parentTaskId }),
+      openProperties: setPropertiesFor,
       requestDelete: setDeleteFor,
     }),
-    [patch, toggleTask, patchTask, requestCompletion, addTask, removeTask, thumbs]
+    [patch, toggleTask, patchTask, requestCompletion, addTask, removeTask, thumbs, renameKey, addUnder]
   );
 
   return (
@@ -471,8 +488,9 @@ export default function ProjectsWorkspace({
             ))}
           </select>
           <NewProjectButton companies={companies} clients={clients} team={team} categories={categoryOptions.map((c) => c.label)} />
-          {/* On a phone the table header is gone, so the schema builder needs
-              a home in the toolbar or it becomes unreachable. */}
+          {/* The schema builder lives here at every width. It used to sit in
+              the table's header row, which cost a column and put a control
+              that changes the database inside a row of data headings. */}
           <span className="pt-add-mobile">
             <AddPropertyButton />
           </span>
@@ -540,6 +558,21 @@ export default function ProjectsWorkspace({
           fileCount={deleteFor.project.files.length}
           onCancel={() => setDeleteFor(null)}
           onConfirm={() => removeProject(deleteFor)}
+        />
+      )}
+
+      {propertiesFor && (
+        <PropertiesModal
+          row={propertiesFor}
+          custom={schema.custom}
+          onPatch={(name, prop, value) =>
+            patch(
+              propertiesFor.project.id,
+              { custom: { ...(propertiesFor.project.custom ?? {}), [name]: value } },
+              { custom: { [name]: { type: prop.type, value } } }
+            )
+          }
+          onClose={() => setPropertiesFor(null)}
         />
       )}
 

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Task } from "@/lib/types";
 import type { TaskNode, TaskTree as Tree } from "@/lib/taskTree";
-import { DateCell, MultiPickCell, SelectCell, TextCell, type PickOption } from "@/components/projects/editable";
+import { DateCell, MultiPickCell, Popover, SelectCell, TextCell, type PickOption } from "@/components/projects/editable";
 import Thumbnail from "@/components/projects/Thumbnail";
 
 /* ==================================================================
@@ -35,6 +35,12 @@ export interface TaskRowHandlers {
   ) => Promise<void>;
   removeTask: (task: Task) => void;
   thumbs: Record<string, string>;
+  startRename: (key: string) => void;
+  renameKey: string | null;
+  clearRename: () => void;
+  startAdd: (projectId: string, parentTaskId?: string) => void;
+  addUnder: { projectId: string; parentTaskId?: string } | null;
+  clearAdd: () => void;
 }
 
 function statusTone(value: string): string {
@@ -80,6 +86,8 @@ function AddTaskRow({
   depth,
   columns,
   onAdd,
+  hint,
+  onHintTaken,
 }: {
   projectId: string;
   parentTaskId?: string;
@@ -87,6 +95,8 @@ function AddTaskRow({
   /** Total cells in a row, so the trailing filler spans correctly. */
   columns: number;
   onAdd: TaskRowHandlers["addTask"];
+  hint: TaskRowHandlers["addUnder"];
+  onHintTaken: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -98,6 +108,14 @@ function AddTaskRow({
   const [error, setError] = useState<string | null>(null);
 
   const word = depth === 0 ? "Add task" : "Add sub-task";
+  const asked =
+    hint && hint.projectId === projectId && (hint.parentTaskId ?? undefined) === (parentTaskId ?? undefined);
+  useEffect(() => {
+    if (asked) {
+      setOpen(true);
+      onHintTaken();
+    }
+  }, [asked, onHintTaken]);
   const indent = { ["--pt-indent" as string]: `${depth * 20}px` };
 
   async function submit() {
@@ -201,6 +219,56 @@ function AddTaskRow({
   );
 }
 
+/**
+ * The ··· menu on a sub-task row.
+ *
+ * The same three actions a project has, minus the ones a task has no notion
+ * of. Delete goes straight through — the branch it takes with it is named in
+ * the confirmation toast rather than behind a modal, because a sub-task is a
+ * cheap thing to recreate and Notion archives rather than erases.
+ */
+function TaskMenu({
+  node,
+  projectId,
+  handlers,
+}: {
+  node: TaskNode;
+  projectId: string;
+  handlers: TaskRowHandlers;
+}) {
+  const [open, setOpen] = useState(false);
+  const { task } = node;
+  return (
+    <span className="pt-menu-wrap">
+      <button
+        className={`pt-menu-btn${open ? " on" : ""}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Actions for ${task.title}`}
+        type="button"
+      >
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" />
+        </svg>
+      </button>
+      {open && (
+        <Popover onClose={() => setOpen(false)}>
+          <button className="ed-opt" onClick={() => { setOpen(false); handlers.startRename(`task:${task.id}`); }}>
+            Rename
+          </button>
+          <button className="ed-opt" onClick={() => { setOpen(false); handlers.startAdd(projectId, task.id); }}>
+            Add sub-task
+          </button>
+          <button className="ed-opt danger" onClick={() => { setOpen(false); handlers.removeTask(task); }}>
+            {node.children.length ? `Delete task and ${node.leafCount} items` : "Delete task"}
+          </button>
+        </Popover>
+      )}
+    </span>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* One task, as a table row                                            */
 /* ------------------------------------------------------------------ */
@@ -293,6 +361,8 @@ function TaskRow({
             <TextCell
               value={task.title}
               onSave={(title) => handlers.patchTask(task, { title }, { title })}
+              openWhen={handlers.renameKey === `task:${task.id}`}
+              onOpened={handlers.clearRename}
               nav={{ row: baseRow, col }}
             />
           </span>
@@ -308,15 +378,6 @@ function TaskRow({
             </span>
           )}
 
-            <button
-              className="pt-sub-del"
-              type="button"
-              onClick={() => handlers.removeTask(task)}
-              aria-label={`Delete ${task.title}${hasKids ? ` and its ${node.leafCount} sub-items` : ""}`}
-              title={hasKids ? `Deletes this and everything under it (${node.leafCount})` : "Delete"}
-            >
-              ✕
-            </button>
           </div>
         </td>
 
@@ -400,20 +461,18 @@ function TaskRow({
           />
         </td>
 
-        <td data-label="Files">
+        <td className="pt-actions" data-label="Files">
+          <div className="pt-actions-inner">
           {task.files.length ? (
             <a className="pt-res-link" href={task.files[0].url} target="_blank" rel="noreferrer">
               Check here
-              {task.files.length > 1 && <span className="pt-res-count">{task.files.length}</span>}
             </a>
           ) : (
             <span className="pt-inherit">—</span>
           )}
+          <TaskMenu node={node} handlers={handlers} projectId={projectId} />
+          </div>
         </td>
-
-        {/* Budget is the project's, and a task has no invoice. Everything past
-            Files is filler rather than a repeated figure. */}
-        <td colSpan={columns - 10} />
       </tr>
 
       {isOpen &&
@@ -439,6 +498,8 @@ function TaskRow({
           depth={node.depth + 1}
           columns={columns}
           onAdd={handlers.addTask}
+          hint={handlers.addUnder}
+          onHintTaken={handlers.clearAdd}
         />
       )}
     </>
@@ -510,7 +571,14 @@ export default function TaskRows({
         />
       ))}
 
-      <AddTaskRow projectId={projectId} depth={0} columns={columns} onAdd={handlers.addTask} />
+      <AddTaskRow
+        projectId={projectId}
+        depth={0}
+        columns={columns}
+        onAdd={handlers.addTask}
+        hint={handlers.addUnder}
+        onHintTaken={handlers.clearAdd}
+      />
     </>
   );
 }

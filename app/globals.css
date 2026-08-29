@@ -1880,7 +1880,10 @@ html[data-theme="dark"]{
 /* ---------- sections ---------- */
 .pt-sections{ display:grid; gap:14px; margin-bottom:16px; }
 .card.pt-section{ padding:0; overflow:hidden; }
-.pt-section.personal{ border-style:dashed; }
+/* The personal section used to be a dashed-border card. With the cards gone
+   there is nothing to dash — the eyebrow above the title already says which
+   kind of work it is. */
+.pt-section.personal .pt-section-head{ border:none; }
 .pt-section-head{
   display:flex; align-items:center; gap:10px;
   padding:12px 16px; border-bottom:1px solid var(--border);
@@ -1929,26 +1932,19 @@ html[data-theme="dark"]{
 /* Percentages over 100 are normalised by the fixed layout, so these are pure
    ratios — the table still ends exactly at its frame. The name column takes
    the largest share because it is the only one holding a full sentence. */
-/* No width: the name column takes whatever the others leave, which is what
-   "flex-grow" means in a table — and it means a column hidden at a narrower
-   viewport gives its space to the project name rather than leaving a gap at
-   the right edge.
-
-   The percentages below therefore have to sum to about 74, not 100. They did
-   sum to 92 on the first attempt, which left the name 8% and collapsed it to
-   nothing: `auto` is not "as much as it needs", it is "whatever is left". */
-.pt-table col.c-name{ width:auto; }
-.pt-table col.c-date{ width:7.7%; }
-.pt-table col.c-cat{ width:5.7%; }
-.pt-table col.c-people{ width:4.4%; }
-.pt-table col.c-status{ width:7.7%; }
-.pt-table col.c-when{ width:5.3%; }
-.pt-table col.c-next{ width:7.3%; }
-.pt-table col.c-prio{ width:6.1%; }
-.pt-table col.c-files{ width:6.5%; }
-.pt-table col.c-money{ width:7.3%; }
-.pt-table col.c-custom{ width:3.6%; }
-.pt-table col.c-add{ width:1.6%; }
+/* The spec's grid, as ratios. Under `table-fixed` these are binding, and the
+   name column takes whatever rounding leaves — a column hidden at a narrower
+   viewport gives its space to the project name rather than leaving a gap. */
+.pt-table col.c-name{ width:28%; }
+.pt-table col.c-start{ width:9%; }
+.pt-table col.c-deadline{ width:9%; }
+.pt-table col.c-cat{ width:8%; }
+.pt-table col.c-people{ width:7%; }
+.pt-table col.c-status{ width:10%; }
+.pt-table col.c-when{ width:7%; }
+.pt-table col.c-next{ width:12%; }
+.pt-table col.c-prio{ width:8%; }
+.pt-table col.c-actions{ width:12%; }
 
 .pt-table th{
   text-align:left; font-size:10.5px; font-weight:600; color:var(--ink-muted);
@@ -1979,14 +1975,9 @@ html[data-theme="dark"]{
   <col> as well as the cells is what keeps the remaining columns aligned.
 */
 @media (max-width: 1300px){
-  .pt-table col.c-when, .pt-table col.c-next, .pt-table col.c-custom{ display:none; }
-  .pt-table th.h-when, .pt-table th.h-next, .pt-table th.h-custom,
-  .pt-table td[data-label="Updated"], .pt-table td[data-label="Next task"],
-  .pt-table td.td-custom{ display:none; }
-  /* Custom properties go too — at this width a 42px column shows nothing —
-     and with them the control that adds more. */
-  .pt-table th.pt-add-col{ display:none; }
-  .pt-table col.c-add{ display:none; }
+  .pt-table col.c-when, .pt-table col.c-next{ display:none; }
+  .pt-table th.h-when, .pt-table th.h-next,
+  .pt-table td[data-label="Updated"], .pt-table td[data-label="Next task"]{ display:none; }
   /* One point off the date type is the difference between "08/20/2026" and
      "08/20/20…" in a 69px column. */
   .pt-table td[data-label="Start"] .ed-cell,
@@ -2668,9 +2659,11 @@ html[data-theme="dark"] .btn-danger:hover:not(:disabled){ filter:brightness(1.1)
 
 /* The + lives in the toolbar on mobile instead, so the schema builder is
    still reachable once the header row is gone. */
-.pt-add-mobile{ display:none; }
+/* The + lives in the toolbar at every width now. It used to sit in the table
+   header, in a column of its own — which cost a column and put a schema
+   control inside a row of data headings. */
+.pt-add-mobile{ display:flex; align-items:center; gap:7px; }
 @media (max-width: 900px){
-  .pt-add-mobile{ display:flex; align-items:center; gap:7px; }
   .pt-add-mobile .ap-btn{ width:32px; height:32px; }
 }
 
@@ -2765,81 +2758,83 @@ html[data-theme="dark"] .btn-danger:hover:not(:disabled){ filter:brightness(1.1)
 
 
 /* ==================================================================
-   Projects: the obsidian surface
+   Projects: one surface, no boxes
    ==================================================================
-   The reference for this screen is near-black with hairline dividers, while
-   the rest of the app runs the warmer, lower-glare palette tuned for reading
-   all day. Both can be true: this scopes the cooler surface to the Projects
-   tables in dark mode only, so the screen matches its design without
-   repainting Today, Finance and the rest.
+   The tables used to sit in cards — a lifted, tinted panel per section with
+   its own border and shadow. Three of those stacked down a page read as
+   three separate applications, and the tint made each one a slightly
+   different blue from the page behind it.
 
-   Light mode is untouched. Flipping a light theme to #0D111A would not be
-   "luxury dark", it would be one screen in the wrong theme.
+   Now the section is a heading and a table on the same ground as everything
+   else: no background, no border, no shadow. What separates one section from
+   the next is space and a hairline, which is all a separation ever needed to
+   be. Light mode keeps the warm palette it was tuned for; only the surface
+   treatment is shared.
    ================================================================== */
+.pt-section{
+  background:none;
+  border:none;
+  box-shadow:none;
+  border-radius:0;
+  padding:0;
+  margin-bottom:34px;
+}
+.pt-section-head{
+  background:none;
+  border:none;
+  padding:0 2px 12px;
+}
+.pt-table thead th{ background:none; }
+
+html[data-theme="dark"]{
+  --projects-ink: #e8ecf3;
+  --projects-ink-2: #b6becd;
+  --projects-ink-3: #7c8698;
+}
 html[data-theme="dark"] .pt-section{
-  --surface:#0D111A;
-  --surface-raised:#141926;
-  --field:#101622;
-  --rail:rgba(255,255,255,0.02);
+  --ink:var(--projects-ink);
+  --ink-secondary:var(--projects-ink-2);
+  --ink-muted:var(--projects-ink-3);
   --border:rgba(255,255,255,0.04);
   --border-strong:rgba(255,255,255,0.10);
+  --field:rgba(255,255,255,0.012);
+  --rail:rgba(255,255,255,0.02);
+  --surface:transparent;
+  --surface-raised:#141926;
   --control-edge:#4c566b;
-  --ink:#e8ecf3;
-  --ink-secondary:#b6becd;
-  --ink-muted:#7c8698;
-  background:var(--surface);
-  border:1px solid rgba(255,255,255,0.05);
 }
-html[data-theme="dark"] .pt-section .pt-section-head{
-  background:rgba(255,255,255,0.015);
-  border-bottom:1px solid rgba(255,255,255,0.05);
-}
-html[data-theme="dark"] .pt-table thead th{
-  background:transparent;
-  border-bottom:1px solid rgba(255,255,255,0.06);
-  color:#7c8698;
-}
-
-/* Hairline dividers and a hover that is felt more than seen. A row highlight
-   heavy enough to notice on its own turns a table of twenty rows into twenty
-   competing surfaces. */
-html[data-theme="dark"] .pt-row > td{ border-top:1px solid rgba(255,255,255,0.04); }
+/* Hairline dividers and a hover felt more than seen. A row highlight heavy
+   enough to notice on its own turns twenty rows into twenty surfaces. */
+html[data-theme="dark"] .pt-table thead th{ border-bottom:1px solid rgba(255,255,255,0.06); color:#7c8698; }
+html[data-theme="dark"] .pt-row > td{ border-top:1px solid rgba(255,255,255,0.05); background:transparent; }
 html[data-theme="dark"] .pt-row:hover > td,
 html[data-theme="dark"] .pt-row.open > td{ background:rgba(255,255,255,0.02); }
 html[data-theme="dark"] .pt-sub > td,
 html[data-theme="dark"] .pt-addrow > td,
 html[data-theme="dark"] .pt-sub-empty{
-  background:rgba(255,255,255,0.012);
-  border-top:1px solid rgba(255,255,255,0.04);
+  background:transparent; border-top:1px solid rgba(255,255,255,0.04);
 }
-html[data-theme="dark"] .pt-sub:hover > td{ background:rgba(255,255,255,0.03); }
+html[data-theme="dark"] .pt-sub:hover > td{ background:rgba(255,255,255,0.025); }
 html[data-theme="dark"] .pt-progress{ background:rgba(255,255,255,0.06); }
+html[data-theme="dark"] .pt-branch{ border-color:rgba(255,255,255,0.14); }
 
 /* ---- badges: a tinted fill, a bright label, a matching hairline ----
-   Same three-part recipe for every state, so a status and a priority read as
-   the same kind of object and only the hue carries the meaning. */
+   One recipe for every state, so a status and a priority read as the same
+   kind of object and only the hue carries the meaning. */
 html[data-theme="dark"] .pt-section .badge,
-html[data-theme="dark"] .pt-section .prio{
-  border:1px solid transparent; font-weight:600;
-}
-/* Done / Delivered / Paid / Active — emerald */
+html[data-theme="dark"] .pt-section .prio{ border:1px solid transparent; font-weight:600; }
 html[data-theme="dark"] .pt-section .badge.paid{
   background:rgba(16,185,129,0.10); color:#34d399; border-color:rgba(16,185,129,0.20);
 }
-/* In progress / Production — amber */
 html[data-theme="dark"] .pt-section .badge.med{
   background:rgba(245,158,11,0.10); color:#fbbf24; border-color:rgba(245,158,11,0.20);
 }
-/* Review / rendering / pending invoice — sky, so "waiting on someone" is not
-   the same colour as "in production". */
 html[data-theme="dark"] .pt-section .badge.high{
   background:rgba(14,165,233,0.10); color:#38bdf8; border-color:rgba(14,165,233,0.22);
 }
-/* Blocked / overdue — ruby */
 html[data-theme="dark"] .pt-section .badge.overdue{
   background:rgba(244,63,94,0.10); color:#fb7185; border-color:rgba(244,63,94,0.20);
 }
-/* Idea / backlog / not started — slate */
 html[data-theme="dark"] .pt-section .badge.pending{
   background:rgba(39,39,42,0.9); color:#d4d4d8; border-color:rgba(63,63,70,0.5);
 }
@@ -2853,15 +2848,54 @@ html[data-theme="dark"] .pt-section .prio.medium{
 html[data-theme="dark"] .pt-section .prio.low{
   background:rgba(255,255,255,0.04); color:#8b94a5; border-color:rgba(255,255,255,0.07);
 }
-/* Links */
 html[data-theme="dark"] .pt-section .pt-res,
-html[data-theme="dark"] .pt-section .pt-res-link{ color:#38bdf8; font-size:11.5px; font-weight:500; }
+html[data-theme="dark"] .pt-section .pt-res-link{ color:#38bdf8; font-size:11px; font-weight:500; }
 html[data-theme="dark"] .pt-section .pt-res:hover,
 html[data-theme="dark"] .pt-section .pt-res-link:hover{ color:#7dd3fc; }
-html[data-theme="dark"] .pt-section .pt-branch{ border-color:rgba(255,255,255,0.10); }
 
 /* The section header, two lines: what kind of work, then whose. */
 .pt-section-eyebrow{
   display:block; font-size:10px; font-weight:650; letter-spacing:0.06em;
   text-transform:uppercase; color:var(--ink-muted); margin-bottom:2px;
 }
+
+/* Files and the ··· menu share the last column. */
+/* Files and the ··· menu share the last column and must stay on one line:
+   the link takes what is left after the menu, rather than the menu wrapping
+   under it. */
+.pt-actions{ white-space:nowrap; }
+/* The flex row is a div INSIDE the cell. Setting display:flex on a <td> takes
+   it out of the table's column grid and drags every cell after it out of line
+   with the headers — three times now, so it is written down here as well as
+   in the component. */
+.pt-actions-inner{ display:flex; align-items:center; gap:8px; min-width:0; }
+.pt-actions-inner .pt-res{ min-width:0; max-width:calc(100% - 30px); }
+.pt-actions-inner .pt-menu-wrap{ margin-left:auto; flex:0 0 auto; }
+.pt-dot-sep{
+  width:3px; height:3px; border-radius:50%; background:var(--ink-muted);
+  flex:0 0 auto; opacity:0.6;
+}
+.pt-pay-dot{
+  width:7px; height:7px; border-radius:50%; flex:0 0 auto;
+  background:var(--ink-muted); box-shadow:0 0 0 2px transparent;
+}
+.pt-pay-dot.paid{ background:#34d399; }
+.pt-pay-dot.half-done{ background:#fbbf24; }
+.pt-pay-dot.pending{ background:#38bdf8; }
+.pt-pay-dot.overdue{ background:#fb7185; }
+.pt-pay-dot.not-invoiced{ background:transparent; box-shadow:inset 0 0 0 1.5px var(--ink-muted); }
+.pt-subline .ed-cell{ font-size:11px; padding:1px 3px; min-height:0; }
+
+/* Properties, in a modal instead of a column each. */
+.pm-modal{ max-width:520px; }
+.pm-list{ display:grid; gap:2px; padding:4px 0 10px; }
+.pm-field{
+  display:grid; grid-template-columns:minmax(0,140px) minmax(0,1fr); gap:14px;
+  align-items:center; padding:7px 2px; border-bottom:1px solid var(--border);
+}
+.pm-label{ display:flex; flex-direction:column; gap:2px; font-size:12px; font-weight:600; color:var(--ink-secondary); }
+.pm-type{ font-size:10px; font-weight:500; color:var(--ink-muted); text-transform:capitalize; }
+.pm-value{ min-width:0; }
+.pm-readonly{ font-size:12px; color:var(--ink-muted); }
+.pm-foot{ display:flex; align-items:center; gap:10px; padding-top:6px; border-top:1px solid var(--border); }
+.pm-note{ font-size:11.5px; color:var(--ink-muted); }

@@ -113,141 +113,18 @@ export interface TreeHandlers {
   requestDelete: (row: ProjectRow) => void;
   addTask: TaskRowHandlers["addTask"];
   removeTask: TaskRowHandlers["removeTask"];
+  /** Puts a row's title cell straight into edit mode, from the ··· menu. */
+  startRename: (key: string) => void;
+  renameKey: string | null;
+  clearRename: () => void;
+  /** Opens the inline add-task row under a project or a task. */
+  startAdd: (projectId: string, parentTaskId?: string) => void;
+  addUnder: { projectId: string; parentTaskId?: string } | null;
+  clearAdd: () => void;
+  /** The workspace's own Notion properties, in a popover rather than columns. */
+  openProperties: (row: ProjectRow) => void;
   /** Locally-stored previews, keyed by project or task page id. */
   thumbs: Record<string, string>;
-}
-
-/* ------------------------------------------------------------------ */
-/* Custom property cells                                               */
-/* ------------------------------------------------------------------ */
-
-/**
- * One user-added column.
- *
- * Each Notion type gets the editor that matches it rather than a text box for
- * everything — a checkbox you have to type "true" into is not an editor. The
- * types Notion computes (formula, rollup, created time) render read-only,
- * because writing to them is not a thing the API allows and a cell that looks
- * editable and silently fails is worse than one that plainly isn't.
- */
-function CustomCell({
-  prop,
-  value,
-  onSave,
-  nav,
-}: {
-  prop: import("@/lib/customProps").CustomProperty;
-  value: string | number | boolean | string[] | undefined;
-  onSave: (v: string | number | boolean | string[] | undefined) => void;
-  nav: CellNav;
-}) {
-  if (!prop.editable) {
-    const shown = Array.isArray(value) ? value.join(", ") : value === undefined ? "—" : String(value);
-    return <span className="pt-muted" title="Notion computes this — not editable here">{shown}</span>;
-  }
-
-  switch (prop.type) {
-    case "number":
-      return (
-        <NumberCell
-          value={typeof value === "number" ? value : undefined}
-          onSave={(v) => onSave(v)}
-          nav={nav}
-        />
-      );
-    case "date":
-      return (
-        <DateCell
-          value={typeof value === "string" ? value : undefined}
-          format={shortDate}
-          placeholder="—"
-          onSave={(v) => onSave(v)}
-          nav={nav}
-        />
-      );
-    case "checkbox":
-      return (
-        <button
-          className={`pt-check standalone${value ? " on" : ""}`}
-          onClick={() => onSave(!value)}
-          aria-pressed={Boolean(value)}
-          aria-label={`${prop.name}: ${value ? "yes" : "no"}`}
-          {...navAttrs(nav)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSave(!value); }
-          }}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m5 13 4 4L19 7" />
-          </svg>
-        </button>
-      );
-    case "select":
-    case "status":
-      return (
-        <SelectCell
-          value={typeof value === "string" ? value : undefined}
-          options={prop.options ?? []}
-          heading={prop.name}
-          onSave={(v) => onSave(v)}
-          render={(v) => <span className="type-pill">{v}</span>}
-          nav={nav}
-        />
-      );
-    case "multi_select":
-      return (
-        <MultiPickCell
-          selected={Array.isArray(value) ? value : []}
-          options={(prop.options ?? []).map((o) => ({ id: o, label: o }))}
-          heading={prop.name}
-          placeholder="—"
-          onSave={(ids) => onSave(ids)}
-          renderClosed={(chosen) => (
-            <span className="pt-cats">
-              <span className="type-pill">{chosen[0].label}</span>
-              {chosen.length > 1 && <span className="cell-muted">+{chosen.length - 1}</span>}
-            </span>
-          )}
-          nav={nav}
-        />
-      );
-    case "url":
-    case "email":
-    case "phone_number": {
-      const text = typeof value === "string" ? value : "";
-      const href = prop.type === "url" ? text : prop.type === "email" ? `mailto:${text}` : `tel:${text}`;
-      return (
-        <span className="pt-linked">
-          <TextCell value={text} onSave={(v) => onSave(v)} placeholder="—" nav={nav} />
-          {text && (
-            <a href={href} target="_blank" rel="noreferrer" className="pt-linked-go" aria-label={`Open ${text}`}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M7 17 17 7M9 7h8v8" />
-              </svg>
-            </a>
-          )}
-        </span>
-      );
-    }
-    case "people":
-    case "files":
-      // Both need a picker this table does not have — a Notion member list, or
-      // an upload flow that already lives in the resources modal.
-      return (
-        <span className="pt-muted" title="Edit this one in Notion">
-          {Array.isArray(value) && value.length ? value.join(", ") : "—"}
-        </span>
-      );
-    default:
-      return (
-        <TextCell
-          value={typeof value === "string" ? value : value === undefined ? "" : String(value)}
-          onSave={(v) => onSave(v)}
-          placeholder="—"
-          nav={nav}
-        />
-      );
-  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -263,13 +140,21 @@ function CustomCell({
  * in the DOM and simply quiet until focused or hovered.
  */
 function RowMenu({
-  row,
-  onDelete,
+  label,
+  onRename,
+  onAddSubtask,
   onResources,
+  onProperties,
+  onDelete,
+  deleteLabel,
 }: {
-  row: ProjectRow;
+  label: string;
+  onRename: () => void;
+  onAddSubtask?: () => void;
+  onResources?: () => void;
+  onProperties?: () => void;
   onDelete: () => void;
-  onResources: () => void;
+  deleteLabel: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -280,7 +165,7 @@ function RowMenu({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Actions for ${row.project.name}`}
+        aria-label={`Actions for ${label}`}
       >
         <svg viewBox="0 0 24 24" fill="currentColor">
           <circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" />
@@ -288,12 +173,17 @@ function RowMenu({
       </button>
       {open && (
         <Popover onClose={() => setOpen(false)}>
-          <button className="ed-opt" onClick={() => { setOpen(false); onResources(); }}>
-            Resources &amp; links
-          </button>
-          <button className="ed-opt danger" onClick={() => { setOpen(false); onDelete(); }}>
-            Delete project…
-          </button>
+          <button className="ed-opt" onClick={() => { setOpen(false); onRename(); }}>Rename</button>
+          {onAddSubtask && (
+            <button className="ed-opt" onClick={() => { setOpen(false); onAddSubtask(); }}>Add sub-task</button>
+          )}
+          {onResources && (
+            <button className="ed-opt" onClick={() => { setOpen(false); onResources(); }}>Resources &amp; links</button>
+          )}
+          {onProperties && (
+            <button className="ed-opt" onClick={() => { setOpen(false); onProperties(); }}>Properties…</button>
+          )}
+          <button className="ed-opt danger" onClick={() => { setOpen(false); onDelete(); }}>{deleteLabel}</button>
         </Popover>
       )}
     </div>
@@ -324,8 +214,9 @@ function ProjectRowView({
   const { clientOptions, categoryOptions, teamOptions, statusOptions, priorityOptions, currency } = options;
   const p = row.project;
   const nav = (col: number): CellNav => ({ row: rowIndex, col });
-  // Eleven fixed columns, the user's custom ones, and the add-property cell.
-  const columns = 12 + options.custom.length;
+  // Ten columns, fixed. Custom properties live in the row menu now, so a
+  // workspace that adds five of them does not narrow this table by five.
+  const columns = 10;
 
   return (
     <>
@@ -354,7 +245,6 @@ function ProjectRowView({
                 <path d="m5 13 4 4L19 7" />
               </svg>
             </button>
-            <RowMenu row={row} onDelete={() => handlers.requestDelete(row)} onResources={() => handlers.openResources(row)} />
             <span className="pt-thumb">
               <Thumbnail
                 pageId={p.id}
@@ -369,6 +259,8 @@ function ProjectRowView({
                 value={p.name}
                 bold
                 onSave={(name) => handlers.patch(p.id, { name }, { name })}
+                openWhen={handlers.renameKey === `project:${p.id}`}
+                onOpened={handlers.clearRename}
                 nav={nav(0)}
               />
               <span className="pt-subline">
@@ -378,8 +270,6 @@ function ProjectRowView({
                     options={clientOptions}
                     placeholder="No client"
                     heading="Client"
-                    // The workspace resolves the name to its relation id; the
-                    // table only ever knows names.
                     onSave={(clientName) => handlers.patch(p.id, {}, { clientName })}
                     render={(v) => (
                       <span className="pt-client">
@@ -392,9 +282,31 @@ function ProjectRowView({
                     nav={nav(1)}
                   />
                 )}
-                {/* Client or headline, not both. Two pieces of small text
-                    sharing 200px means each gets 100 and neither is readable
-                    — the client name is the one that identifies the row. */}
+                {/* Budget on the sub-line, with its settlement state as a
+                    dot rather than a pill. The pill needed 60px the client
+                    name did not have to give, and "is this paid" is a
+                    three-state fact — a colour carries it, with the wording
+                    on hover for anyone who needs the word. */}
+                {!personal && (
+                  <>
+                    <span className="pt-dot-sep" aria-hidden />
+                    <span
+                      className={`pt-pay-dot ${row.payment.state.toLowerCase().replace(/\s+/g, "-")}`}
+                      title={
+                        row.payment.invoiced
+                          ? `${row.payment.state} — ${money(row.payment.paid, currency)} paid of ${money(row.payment.invoiced, currency)} invoiced`
+                          : "No invoice raised against this project yet"
+                      }
+                      aria-label={`Payment: ${row.payment.state}`}
+                    />
+                    <NumberCell
+                      value={p.value}
+                      prefix={currency === "LKR" ? "Rs " : "$"}
+                      onSave={(v) => handlers.patch(p.id, { value: v }, { value: v ?? "" })}
+                      nav={nav(2)}
+                    />
+                  </>
+                )}
                 {personal && p.headline && <span className="pt-headline">{p.headline}</span>}
               </span>
             </div>
@@ -513,67 +425,32 @@ function ProjectRowView({
           />
         </td>
 
-        {/* 10 — resources */}
-        <td data-label="Files">
-          {/* A link, as the reference has it. The bordered button was 96px of
-              chrome in a 78px column, which is what pushed "Check here" into
-              the budget figure beside it. */}
+        {/* Files and the row's actions in one cell — the spec's tenth column.
+            The menu is hover-revealed on a pointer and always present for a
+            keyboard, because "visible on hover" and "reachable" are different
+            requirements and only one of them is optional. */}
+        <td className="pt-actions" data-label="Files">
+          <div className="pt-actions-inner">
           <button className="pt-res" onClick={() => handlers.openResources(row)}>
             Check here
             {p.files.length > 0 && <span className="pt-res-count">{p.files.length}</span>}
           </button>
+          <RowMenu
+            label={p.name}
+            onRename={() => handlers.startRename(`project:${p.id}`)}
+            onAddSubtask={() => {
+              if (!expanded) onToggle();
+              handlers.startAdd(p.id, undefined);
+            }}
+            onResources={() => handlers.openResources(row)}
+            onProperties={options.custom.length ? () => handlers.openProperties(row) : undefined}
+            onDelete={() => handlers.requestDelete(row)}
+            deleteLabel="Delete project…"
+          />
+          </div>
         </td>
-
-        {/* Budget and payment in one cell: the figure with its settlement
-            state under it. Two columns for one fact about money was 190px of
-            a window that had none to give. */}
-        {personal ? (
-          <td className="pt-muted" data-label="Billing">
-            Internal
-          </td>
-        ) : (
-          <td data-label="Budget">
-            <NumberCell
-              value={p.value}
-              prefix={currency === "LKR" ? "Rs " : "$"}
-              onSave={(v) => handlers.patch(p.id, { value: v }, { value: v ?? "" })}
-              nav={nav(11)}
-            />
-            <span
-              className={`${paymentBadge[row.payment.state] ?? "badge pending"} pt-pay`}
-              title={
-                row.payment.invoiced
-                  ? `${money(row.payment.paid, currency)} paid of ${money(row.payment.invoiced, currency)} invoiced`
-                  : "No invoice raised against this project yet"
-              }
-            >
-              {row.payment.state}
-            </span>
-          </td>
-        )}
-
-        {options.custom.map((prop, i) => (
-          <td key={prop.name} className="td-custom" data-label={prop.name}>
-            <CustomCell
-              prop={prop}
-              value={p.custom?.[prop.name]}
-              nav={nav(13 + i)}
-              onSave={(v) =>
-                handlers.patch(
-                  p.id,
-                  { custom: { ...(p.custom ?? {}), [prop.name]: v } },
-                  { custom: { [prop.name]: { type: prop.type, value: v } } }
-                )
-              }
-            />
-          </td>
-        ))}
-        {/* One empty cell under the + so the header and body stay aligned. */}
-        <td className="pt-add-col" />
       </tr>
 
-      {/* The progress line sits in its own zero-height row so it can span the
-          whole table without fighting the cell padding above it. */}
       {/* Sub-tasks are rows of this table, not a panel inside one cell — so a
           task's deadline sits under the word "Deadline" rather than under it
           by coincidence. */}
@@ -702,29 +579,29 @@ export default function ProjectTree({
                 <table className="pt-table">
                   <colgroup>
                     <col className="c-name" />
-                    <col className="c-date" />
-                    <col className="c-date" />
+                    <col className="c-start" />
+                    <col className="c-deadline" />
                     <col className="c-cat" />
                     <col className="c-people" />
                     <col className="c-status" />
                     <col className="c-when" />
                     <col className="c-next" />
                     <col className="c-prio" />
-                    <col className="c-files" />
-                    <col className="c-money" />
-                    {options.custom.map((prop) => (
-                      <col key={prop.name} className="c-custom" />
-                    ))}
-                    <col className="c-add" />
+                    <col className="c-actions" />
                   </colgroup>
                   <thead>
                     <tr>
                       {/*
-                        Eleven columns, not thirteen. Client moved into the
-                        project cell as its sub-line — it is an attribute of
-                        the name, it was costing 92px of a window that had
-                        none to spare, and the section above already says
-                        which company the work belongs to.
+                        Ten columns, and every one of them earns its width.
+
+                        Client and budget moved into the project cell as its
+                        sub-line — both are attributes of the project rather
+                        than independent facts, and between them they were
+                        costing 17% of a table that had none to spare. The
+                        workspace's own custom properties moved into the row
+                        menu for the same reason: a Notion database grows
+                        properties over time, and a screen that gives each one
+                        a column gets narrower every month.
                       */}
                       <th>Project</th>
                       <th>Start</th>
@@ -735,21 +612,8 @@ export default function ProjectTree({
                       <th className="h-when">Updated</th>
                       <th className="h-next">Next task</th>
                       <th>Priority</th>
-                      <th>Files</th>
-                      <th>{personal ? "Billing" : "Budget"}</th>
-                      {options.custom.map((prop) => (
-                        <th
-                          key={prop.name}
-                          className="h-custom"
-                          title={`${prop.type}${prop.editable ? "" : " — computed by Notion"}`}
-                        >
-                          {prop.name}
-                        </th>
-                      ))}
-                      <th className="pt-add-col">
-                        <AddPropertyButton />
-                      </th>
-                    </tr>
+                      <th className="h-actions">Files &amp; actions</th>
+</tr>
                   </thead>
                   <tbody>
                     {section.rows.map((row) => {

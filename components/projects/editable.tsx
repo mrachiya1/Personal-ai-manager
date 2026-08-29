@@ -149,6 +149,8 @@ export function TextCell({
   bold = false,
   nav,
   debounce = true,
+  openWhen,
+  onOpened,
 }: {
   value: string;
   onSave: (v: string) => void;
@@ -156,6 +158,10 @@ export function TextCell({
   bold?: boolean;
   nav?: CellNav;
   debounce?: boolean;
+  /** Set true to drop straight into edit mode — the ··· menu's "Rename". */
+  openWhen?: boolean;
+  /** Called once the cell has taken the hint, so the caller can clear it. */
+  onOpened?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -174,6 +180,16 @@ export function TextCell({
       ref.current?.select();
     }
   }, [editing]);
+
+  // "Rename" from the row menu is the same edit the cell already does; it
+  // just starts it from somewhere else. A second rename dialog would be a
+  // second place for the save logic to drift.
+  useEffect(() => {
+    if (openWhen) {
+      setEditing(true);
+      onOpened?.();
+    }
+  }, [openWhen, onOpened]);
 
   function stop(commit: boolean) {
     setEditing(false);
