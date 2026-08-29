@@ -59,25 +59,65 @@ const F = {
     page(tm.sam, { Name: T("Sam Oyelaran"), Role: R("Editor"), Company: L([co.studio]), Status: S("Inactive"), Notes: R("On sabbatical until November.") }),
   ],
   projects: [
-    page(pr.film, { Name: T("Northwind — Brand Relaunch Film"), Company: L([co.studio]), Client: L([cl.north]), Category: M(["3D", "Motion"]), Status: S("Production"), Description: R("Full CG hero film plus three cutdowns for the autumn campaign."), Deadline: D(day(-2)), "Render Priority": S("High"), "Estimated Render Time (hrs)": N(46), "Assigned To": L([tm.dinesh, tm.aisha, tm.marco]), "Start Date": D(day(-56)), Value: N(480000), Headline: R("90-second hero film for the autumn campaign"), "Client Requests": R("Wants an extra 6-second vertical cut for TikTok, and the logo sting slowed down."), "Last Reviewed": D(day(-4)), "Reviewed By": L([tm.marco]), Files: FILES(["Northwind brief v3.pdf", "Signed SOW.pdf", "Board refs.zip"]) }, -0.05),
-    page(pr.pack, { Name: T("Northwind — Packaging Renders"), Company: L([co.studio]), Client: L([cl.north]), Category: M(["3D"]), Status: S("Rendering-Ready"), Description: R("42 SKU renders for the new range."), Deadline: D(day(2)), "Render Priority": S("Medium"), "Estimated Render Time (hrs)": N(18), "Assigned To": L([tm.dinesh]), "Start Date": D(day(-21)), Value: N(165000), Headline: R("42 SKU renders for the new range"), "Client Requests": R(""), "Last Reviewed": D(null), "Reviewed By": L([]), Files: FILES(["SKU list.xlsx"]) }, -1),
-    page(pr.explain, { Name: T("Lumen — Product Explainer"), Company: L([co.orex]), Client: L([cl.lumen]), Category: M(["Motion", "Web"]), Status: S("Planning"), Description: R("Explainer for the clinician dashboard."), Deadline: D(day(23)), "Render Priority": S("Low"), "Estimated Render Time (hrs)": N(9), "Assigned To": L([tm.aisha, tm.nadia]), "Start Date": D(day(-6)), Value: N(92000), Headline: R("Explainer for the clinician dashboard"), "Client Requests": R("Legal need to approve every on-screen claim before animation."), "Last Reviewed": D(day(-7)), "Reviewed By": L([tm.nadia]), Files: FILES(["Clinician script.docx", "Legal notes.pdf"]) }, -5),
+    page(pr.film, { Name: T("Northwind — Brand Relaunch Film"), Company: L([co.studio]), Client: L([cl.north]), Category: M(["3D", "Motion"]), Status: S("Production"), Description: R("Full CG hero film plus three cutdowns for the autumn campaign."), Deadline: D(day(-2)), "Render Priority": S("High"), "Estimated Render Time (hrs)": N(46), "Assigned To": L([tm.dinesh, tm.aisha, tm.marco]), "Start Date": D(day(-56)), Value: N(480000), Headline: R("90-second hero film for the autumn campaign"), "Client Requests": R("Wants an extra 6-second vertical cut for TikTok, and the logo sting slowed down."), "Last Reviewed": D(day(-4)), "Reviewed By": L([tm.marco]), "Staging URL": { url: "https://staging.northwind.example" }, Invoiced: C(true), Files: FILES(["Northwind brief v3.pdf", "Signed SOW.pdf", "Board refs.zip"]) }, -0.05),
+    page(pr.pack, { Name: T("Northwind — Packaging Renders"), Company: L([co.studio]), Client: L([cl.north]), Category: M(["3D"]), Status: S("Rendering-Ready"), Description: R("42 SKU renders for the new range."), Deadline: D(day(2)), "Render Priority": S("Medium"), "Estimated Render Time (hrs)": N(18), "Assigned To": L([tm.dinesh]), "Start Date": D(day(-21)), Value: N(165000), Headline: R("42 SKU renders for the new range"), "Client Requests": R(""), "Last Reviewed": D(null), "Reviewed By": L([]), "Staging URL": { url: "" }, Invoiced: C(false), Files: FILES(["SKU list.xlsx"]) }, -1),
+    page(pr.explain, { Name: T("Lumen — Product Explainer"), Company: L([co.orex]), Client: L([cl.lumen]), Category: M(["Motion", "Web"]), Status: S("Planning"), Description: R("Explainer for the clinician dashboard."), Deadline: D(day(23)), "Render Priority": S("Low"), "Estimated Render Time (hrs)": N(9), "Assigned To": L([tm.aisha, tm.nadia]), "Start Date": D(day(-6)), Value: N(92000), Headline: R("Explainer for the clinician dashboard"), "Client Requests": R("Legal need to approve every on-screen claim before animation."), "Last Reviewed": D(day(-7)), "Reviewed By": L([tm.nadia]), "Staging URL": { url: "" }, Invoiced: C(false), Files: FILES(["Clinician script.docx", "Legal notes.pdf"]) }, -5),
     page(pr.onboard, { Name: T("Lumen — Onboarding Loop"), Company: L([co.orex]), Client: L([cl.lumen]), Category: M(["Motion"]), Status: S("Idea"), Description: R(""), Deadline: D(day(37)), "Render Priority": S("Low"), "Assigned To": L([]), Value: N(40000), Headline: R(""), "Client Requests": R(""), "Reviewed By": L([]) }, -12),
     page(pr.reel, { Name: T("Studio Reel 2026"), Company: L([co.studio]), Client: L([]), Category: M(["3D", "Motion", "Web"]), Status: S("Production"), Description: R("Annual showreel, internal."), Deadline: D(day(4)), "Render Priority": S("Medium"), "Estimated Render Time (hrs)": N(30), "Assigned To": L([tm.dinesh, tm.aisha, tm.marco, tm.nadia]), "Start Date": D(day(-16)), Value: N(0), Headline: R("Internal — annual showreel"), "Client Requests": R(""), "Reviewed By": L([]) }, -2),
     page(pr.vero, { Name: T("Vero — Fleet Dashboard Motion Kit"), Company: L([co.orex]), Client: L([cl.vero]), Category: M(["Motion"]), Status: S("Delivered"), Description: R("Twelve UI motion components."), Deadline: D(day(-40)), "Render Priority": S("Low"), "Assigned To": L([tm.aisha]), "Start Date": D(day(-95)), Value: N(210000), Headline: R("Twelve UI motion components, delivered"), "Last Reviewed": D(day(-38)), "Reviewed By": L([tm.marco]) }, -38),
     page(pr.atlas, { Name: T("Atlas Foods — Pitch Concept"), Company: L([co.studio]), Client: L([cl.atlas]), Category: M(["3D"]), Status: S("Idea"), Description: R("Speculative concept for the pitch."), Deadline: D(day(11)), "Render Priority": S("High"), "Assigned To": L([tm.dinesh]), "Start Date": D(day(-1)), Value: N(0), Headline: R("Speculative — pitch is on the 12th"), "Client Requests": R("Asked to see two directions, not one."), "Reviewed By": L([]) }, -0.3),
   ],
   tasks: [
-    page("tk1", { Title: T("Storyboard approved"), Project: L([pr.film]), Status: S("Done"), "Due Date": D(day(-40)), Tags: M(["Creative"]) }),
-    page("tk2", { Title: T("Previz pass"), Project: L([pr.film]), Status: S("Done"), "Due Date": D(day(-24)), Tags: M([]) }),
-    page("tk3", { Title: T("Lighting + lookdev"), Project: L([pr.film]), Status: S("In Progress"), "Due Date": D(day(1)), Tags: M(["3D"]) }),
-    page("tk4", { Title: T("Final render + grade"), Project: L([pr.film]), Status: S("Blocked"), "Due Date": D(day(3)), Tags: M(["3D"]) }),
-    page("tk5", { Title: T("Model 42 SKUs"), Project: L([pr.pack]), Status: S("Done"), "Due Date": D(day(-8)), Tags: M([]) }),
-    page("tk6", { Title: T("Turntable renders"), Project: L([pr.pack]), Status: S("In Progress"), "Due Date": D(day(0)), Tags: M([]) }),
-    page("tk7", { Title: T("Script sign-off"), Project: L([pr.explain]), Status: S("Done"), "Due Date": D(day(-3)), Tags: M(["Client"]) }),
-    page("tk8", { Title: T("Design frames"), Project: L([pr.explain]), Status: S("Backlog"), "Due Date": D(day(9)), Tags: M([]) }),
-    page("tk9", { Title: T("Cut selects"), Project: L([pr.reel]), Status: S("In Progress"), "Due Date": D(day(0)), Tags: M([]) }),
-    page("tk10", { Title: T("Two concept directions"), Project: L([pr.atlas]), Status: S("Backlog"), "Due Date": D(day(6)), Tags: M(["Creative"]) }),
+    /* --- pr.film: four levels deep, the spec's own example shape ---------
+       Showreel -> Shot 01 Animation -> Lighting & Shading -> Turntable pass.
+       Deliberately lopsided: one milestone holds a deep branch and a shallow
+       one, which is the case where counting immediate children instead of
+       leaves gives the wrong percentage. */
+    page("tk1", { Title: T("Storyboard approved"), Project: L([pr.film]), Status: S("Done"), "Due Date": D(day(-40)), Tags: M(["Creative"]),
+      "Parent Task": L([]), "Start Date": D(day(-46)), Priority: S("Normal"), "Assigned To": L([tm.dinesh]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    page("tk2", { Title: T("Previz pass"), Project: L([pr.film]), Status: S("Done"), "Due Date": D(day(-24)), Tags: M([]),
+      "Parent Task": L([]), "Start Date": D(day(-34)), Priority: S("Normal"), "Assigned To": L([]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    page("tk3", { Title: T("Shot 01 Animation"), Project: L([pr.film]), Status: S("In Progress"), "Due Date": D(day(1)), Tags: M(["3D"]),
+      "Parent Task": L([]), "Start Date": D(day(-6)), Priority: S("High"), "Assigned To": L([tm.dinesh, tm.aisha]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    page("tk3a", { Title: T("Animation Planning"), Project: L([pr.film]), Status: S("Done"), "Due Date": D(day(-4)), Tags: M([]),
+      "Parent Task": L(["tk3"]), "Start Date": D(day(-6)), Priority: S("Normal"), "Assigned To": L([tm.dinesh]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    page("tk3b", { Title: T("3D Modeling"), Project: L([pr.film]), Status: S("Done"), "Due Date": D(day(-2)), Tags: M([]),
+      "Parent Task": L(["tk3"]), "Start Date": D(day(-4)), Priority: S("Normal"), "Assigned To": L([tm.aisha]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    page("tk3c", { Title: T("Lighting & Shading"), Project: L([pr.film]), Status: S("In Progress"), "Due Date": D(day(1)), Tags: M([]),
+      "Parent Task": L(["tk3"]), "Start Date": D(day(-1)), Priority: S("Urgent"), "Assigned To": L([tm.aisha]), Thumbnail: { files: [] },
+      Files: { files: [{ name: "Lighting ref", type: "external", external: { url: "https://figma.com/file/lighting/Ref" } }] } }),
+    page("tk3c1", { Title: T("Key light pass"), Project: L([pr.film]), Status: S("Done"), "Due Date": D(day(0)), Tags: M([]),
+      "Parent Task": L(["tk3c"]), "Start Date": D(day(-1)), Priority: S("Normal"), "Assigned To": L([]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    page("tk3c2", { Title: T("Turntable pass"), Project: L([pr.film]), Status: S("Backlog"), "Due Date": D(day(1)), Tags: M([]),
+      "Parent Task": L(["tk3c"]), "Start Date": D(day(0)), Priority: S("High"), "Assigned To": L([]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    page("tk3d", { Title: T("Final Render"), Project: L([pr.film]), Status: S("Backlog"), "Due Date": D(day(3)), Tags: M(["3D"]),
+      "Parent Task": L(["tk3"]), "Start Date": D(day(2)), Priority: S("High"), "Assigned To": L([]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    page("tk4", { Title: T("Final render + grade"), Project: L([pr.film]), Status: S("Blocked"), "Due Date": D(day(3)), Tags: M(["3D"]),
+      "Parent Task": L([]), "Start Date": D(day(2)), Priority: S("High"), "Assigned To": L([]), Thumbnail: { files: [] }, Files: { files: [] } }),
+
+    /* --- pr.pack: one milestone away from auto-completing ---------------
+       Ticking "Turntable renders" is the check that a parent completes itself
+       when its last child is done. */
+    page("tk5", { Title: T("Asset build"), Project: L([pr.pack]), Status: S("In Progress"), "Due Date": D(day(0)), Tags: M([]),
+      "Parent Task": L([]), "Start Date": D(day(-12)), Priority: S("Normal"), "Assigned To": L([]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    page("tk5a", { Title: T("Model 42 SKUs"), Project: L([pr.pack]), Status: S("Done"), "Due Date": D(day(-8)), Tags: M([]),
+      "Parent Task": L(["tk5"]), "Start Date": D(day(-12)), Priority: S("Normal"), "Assigned To": L([]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    page("tk6", { Title: T("Turntable renders"), Project: L([pr.pack]), Status: S("In Progress"), "Due Date": D(day(0)), Tags: M([]),
+      "Parent Task": L(["tk5"]), "Start Date": D(day(-3)), Priority: S("Normal"), "Assigned To": L([]), Thumbnail: { files: [] }, Files: { files: [] } }),
+
+    page("tk7", { Title: T("Script sign-off"), Project: L([pr.explain]), Status: S("Done"), "Due Date": D(day(-3)), Tags: M(["Client"]),
+      "Parent Task": L([]), "Start Date": D(day(-10)), Priority: S("Normal"), "Assigned To": L([]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    page("tk8", { Title: T("Design frames"), Project: L([pr.explain]), Status: S("Backlog"), "Due Date": D(day(9)), Tags: M([]),
+      "Parent Task": L([]), "Start Date": D(day(4)), Priority: S("Low"), "Assigned To": L([]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    page("tk9", { Title: T("Cut selects"), Project: L([pr.reel]), Status: S("In Progress"), "Due Date": D(day(0)), Tags: M([]),
+      "Parent Task": L([]), "Start Date": D(day(-2)), Priority: S("Normal"), "Assigned To": L([]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    /* A parent that does not exist. Nothing stops someone deleting a task in
+       Notion while its children point at it, and an orphan that renders
+       nowhere is a task the owner has silently lost. */
+    page("tk9x", { Title: T("Orphaned grade pass"), Project: L([pr.reel]), Status: S("Backlog"), "Due Date": D(day(2)), Tags: M([]),
+      "Parent Task": L(["tk-does-not-exist"]), "Start Date": D(day(1)), Priority: S("Normal"), "Assigned To": L([]), Thumbnail: { files: [] }, Files: { files: [] } }),
+    page("tk10", { Title: T("Two concept directions"), Project: L([pr.atlas]), Status: S("Backlog"), "Due Date": D(day(6)), Tags: M(["Creative"]),
+      "Parent Task": L([]), "Start Date": D(day(2)), Priority: S("Normal"), "Assigned To": L([]), Thumbnail: { files: [] }, Files: { files: [] } }),
   ],
   payments: [
     page("pay1", { Label: T("Northwind — film, 50% deposit"), Client: L([cl.north]), Project: L([pr.film]), Amount: N(240000), "Due Date": D(day(-19)), "Paid Date": D(day(-17)), Status: S("Paid"), "Linked Income": L(["inc1"]) }),
@@ -180,7 +220,7 @@ const TENANT_B_FIXTURES = {
       "Estimated Render Time (hrs)": N(1),
       Client: L([]), "Assigned To": L([]), "Start Date": D(day(-5)), Value: N(1),
       Headline: R("Isolation canary"), "Client Requests": R(""), "Last Reviewed": D(null),
-      "Reviewed By": L([]), Files: { files: [] },
+      "Reviewed By": L([]), "Staging URL": { url: "" }, Invoiced: C(false), Files: { files: [] },
     }),
   ],
   [TENANT_B.companies]: [
@@ -190,6 +230,31 @@ const TENANT_B_FIXTURES = {
     }),
   ],
 };
+
+let createdCount = 0;
+const allPages = () => Object.values(F).flat();
+
+/**
+ * Turns what the app WRITES into what Notion RETURNS.
+ *
+ * Notion's write shape for text is `{title:[{text:{content}}]}` and its read
+ * shape is `{title:[{plain_text}]}`. Storing a created page verbatim therefore
+ * produced a row with a blank name on the next read — the record existed, the
+ * title didn't, and a test looking for the task by name saw nothing at all.
+ */
+function normalise(properties = {}) {
+  const out = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (value && Array.isArray(value.title)) {
+      out[key] = { title: value.title.map((t) => ({ ...t, plain_text: t.plain_text ?? t.text?.content ?? "" })) };
+    } else if (value && Array.isArray(value.rich_text)) {
+      out[key] = { rich_text: value.rich_text.map((t) => ({ ...t, plain_text: t.plain_text ?? t.text?.content ?? "" })) };
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
 
 const send = (res, code, body) => {
   res.writeHead(code, { "Content-Type": "application/json" });
@@ -232,8 +297,50 @@ http
       }
       if (dbGet && req.method === "PATCH") return send(res, 200, { object: "database", id: dbGet[1] });
 
-      if (path === "/pages" && req.method === "POST") return send(res, 200, { object: "page", id: "new-" + Date.now() });
-      if (/^\/pages\/[^/]+$/.test(path)) return send(res, 200, { object: "page", id: path.split("/").pop() });
+      // Writes persist for the life of the process.
+      //
+      // They used to be acknowledged and thrown away, which quietly limited
+      // what any test could prove: a created sub-task vanished on the next
+      // router.refresh(), and a rollup that auto-completes a parent could only
+      // be checked by trusting the response rather than by re-reading the row.
+      // A tree is a data structure whose whole behaviour is in how the parts
+      // refer to each other, so the stand-in has to remember them.
+      if (path === "/pages" && req.method === "POST") {
+        let payload = {};
+        try {
+          payload = JSON.parse(body || "{}");
+        } catch {}
+        const dbRaw = String(payload?.parent?.database_id || "").replace(/-/g, "").toLowerCase();
+        const key = byId.get(dbRaw);
+        const created = page(`new-${++createdCount}`, normalise(payload.properties || {}), 0);
+        if (key) F[key].push(created);
+        return send(res, 200, created);
+      }
+
+      const pageOp = path.match(/^\/pages\/([^/]+)$/);
+      if (pageOp) {
+        const id = pageOp[1];
+        const found = allPages().find((pg) => pg.id === id);
+        if (req.method === "PATCH") {
+          let payload = {};
+          try {
+            payload = JSON.parse(body || "{}");
+          } catch {}
+          if (found) {
+            if (payload.archived) {
+              for (const list of Object.values(F)) {
+                const at = list.indexOf(found);
+                if (at >= 0) list.splice(at, 1);
+              }
+            } else {
+              Object.assign(found.properties, normalise(payload.properties || {}));
+              found.last_edited_time = new Date().toISOString();
+            }
+          }
+          return send(res, 200, found || { object: "page", id });
+        }
+        return send(res, 200, found || { object: "page", id, properties: {} });
+      }
 
       // Stand-in for api.sunrise-sunset.org, so the hora/panchang engine has
       // real numbers to chew on in QA. Colombo-ish times, held constant so a

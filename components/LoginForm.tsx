@@ -26,17 +26,6 @@ export default function LoginForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    border: "1px solid var(--border)",
-    borderRadius: 9,
-    padding: "10px 12px",
-    fontSize: 13.5,
-    background: "var(--surface-raised)",
-    color: "var(--ink)",
-    fontFamily: "inherit",
-  };
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
@@ -76,47 +65,59 @@ export default function LoginForm({
 
   return (
     <>
-      <h1 style={{ margin: 0, fontSize: 24, fontWeight: 600, letterSpacing: "-0.025em" }}>
-        {mode === "signup" ? "Create your account" : "Sign in to Orex OS"}
-      </h1>
-      <p style={{ margin: "8px 0 20px 0", fontSize: 13, lineHeight: 1.6, color: "var(--ink-muted)" }}>
+      {/* Tabs rather than a link that swaps the whole card: both routes are
+          equally likely on a tool people are still being invited to, and a
+          tab strip says so without anyone having to read a sentence. */}
+      <div className="auth-tabs" role="tablist" aria-label="Sign in or sign up">
+        <button
+          role="tab"
+          aria-selected={mode === "signin"}
+          className={`auth-tab${mode === "signin" ? " on" : ""}`}
+          onClick={() => { setMode("signin"); setError(null); }}
+        >
+          Login
+        </button>
+        {signupEnabled && (
+          <button
+            role="tab"
+            aria-selected={mode === "signup"}
+            className={`auth-tab${mode === "signup" ? " on" : ""}`}
+            onClick={() => { setMode("signup"); setError(null); }}
+          >
+            Sign Up
+          </button>
+        )}
+      </div>
+
+      <h1 className="auth-title">{mode === "signup" ? "Create your account" : "Welcome back"}</h1>
+      <p className="auth-sub">
         {mode === "signup"
-          ? "Free to create. You'll connect your own Notion workspace afterwards — your data stays in your Notion, not here."
-          : "Projects, finances and AI slip scanning, reading your own Notion workspace."}
+          ? "Free to create. You connect your own Notion workspace afterwards — your projects, finances and notes stay in your Notion, never in a shared database here."
+          : "Every account reads its own Notion workspace. Nothing is shared between accounts."}
       </p>
 
-      <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <form onSubmit={submit} className="auth-form">
       {error && (
-        <div
-          style={{
-            fontSize: 12.5,
-            lineHeight: 1.55,
-            color: "var(--critical-ink)",
-            background: "var(--critical-bg)",
-            border: "1px solid rgba(208,59,59,0.25)",
-            borderRadius: 9,
-            padding: "9px 11px",
-          }}
-        >
+        <div className="auth-error">
           {error}
         </div>
       )}
 
       {mode === "signup" && (
         <div>
-          <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-secondary)", display: "block", marginBottom: 4 }}>
+          <label className="auth-label">
             Name <span style={{ color: "var(--ink-muted)", fontWeight: 500 }}>(optional)</span>
           </label>
-          <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+          <input className="auth-input" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
         </div>
       )}
 
       <div>
-        <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-secondary)", display: "block", marginBottom: 4 }}>
+        <label className="auth-label">
           Email
         </label>
         <input
-          style={inputStyle}
+          className="auth-input"
           type="email"
           required
           value={email}
@@ -127,11 +128,11 @@ export default function LoginForm({
       </div>
 
       <div>
-        <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-secondary)", display: "block", marginBottom: 4 }}>
+        <label className="auth-label">
           Password
         </label>
         <input
-          style={inputStyle}
+          className="auth-input"
           type="password"
           required
           value={password}
@@ -140,7 +141,7 @@ export default function LoginForm({
           placeholder={mode === "signup" ? `at least ${minPasswordLength} characters` : ""}
         />
         {mode === "signup" && (
-          <div style={{ fontSize: 11, color: "var(--ink-muted)", marginTop: 5, lineHeight: 1.5 }}>
+          <div className="auth-hint">
             At least {minPasswordLength} characters. Use something you don&apos;t use anywhere else.
           </div>
         )}
@@ -148,41 +149,12 @@ export default function LoginForm({
 
       <button
         type="submit"
-        className="btn-primary"
+        className="btn-primary auth-submit"
         disabled={busy}
-        style={{ width: "100%", justifyContent: "center", padding: "11px 14px", fontSize: 13.5, borderRadius: 10, marginTop: 2 }}
       >
         {busy ? "Working…" : mode === "signup" ? "Create account" : "Sign in"}
       </button>
 
-      {signupEnabled && (
-        <button
-          type="button"
-          onClick={() => {
-            setMode((m) => (m === "signin" ? "signup" : "signin"));
-            setError(null);
-          }}
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--ink-muted)",
-            fontSize: 12.5,
-            fontFamily: "inherit",
-            cursor: "pointer",
-            padding: "4px 0 0 0",
-          }}
-        >
-          {mode === "signin" ? (
-            <>
-              No account yet? <strong style={{ color: "var(--ink-secondary)" }}>Create one</strong>
-            </>
-          ) : (
-            <>
-              Already have an account? <strong style={{ color: "var(--ink-secondary)" }}>Sign in</strong>
-            </>
-          )}
-        </button>
-      )}
       </form>
     </>
   );

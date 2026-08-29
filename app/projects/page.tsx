@@ -6,11 +6,14 @@ import {
   getTeamMembers,
   getPayments,
   notionConnected,
+  ensureProjectSchema,
+  ensureTaskSchema,
 } from "@/lib/notion";
 import ConnectPrompt from "@/components/ConnectPrompt";
 import ProjectsWorkspace from "@/components/ProjectsWorkspace";
 import { localDateISO } from "@/lib/timezone";
 import { REQUIRED_PROJECT_PROPS } from "@/lib/projectSchema";
+import { getThumbnails } from "@/lib/thumbnails";
 
 export const dynamic = "force-dynamic";
 
@@ -32,13 +35,23 @@ export default async function ProjectsPage() {
 }
 
 async function ProjectsBody() {
-  const [projects, tasks, companies, clients, team, payments] = await Promise.all([
+  // The schema sync runs first and on every render: it adds any missing
+  // property before the data is read, so a freshly-mapped database fills its
+  // columns on the first visit rather than showing a banner about work the
+  // owner then has to go and do by hand.
+  // Both schemas, before anything is read: the Tasks one adds "Parent Task",
+  // and without that relation every task is a root and the tree the rest of
+  // this screen is built around silently degrades to a flat list.
+  const [schema, taskSchema] = await Promise.all([ensureProjectSchema(), ensureTaskSchema()]);
+
+  const [projects, tasks, companies, clients, team, payments, thumbs] = await Promise.all([
     getProjects(),
     getTasks(),
     getCompanies(),
     getClients(),
     getTeamMembers(),
     getPayments(),
+    getThumbnails(),
   ]);
 
   // A project with no Client relation but a payment pointing at it still
@@ -52,21 +65,6 @@ async function ProjectsBody() {
     return viaPayment ? { ...p, clientId: viaPayment } : p;
   });
 
-  // If no project carries any of the added fields, the migration hasn't run —
-  // worth saying plainly rather than showing columns that can never fill.
-  const schemaReady =
-    projects.length === 0 ||
-    projects.some(
-      (p) =>
-        p.assignedTo.length > 0 ||
-        p.startDate !== undefined ||
-        p.value !== undefined ||
-        p.headline !== undefined ||
-        p.clientRequests !== undefined ||
-        p.lastReviewed !== undefined ||
-        p.clientId !== undefined
-    );
-
   const currency = payments.find((pay) => pay.currency)?.currency || "USD";
 
   return (
@@ -76,9 +74,11 @@ async function ProjectsBody() {
       clients={clients}
       team={team}
       tasks={tasks}
+      thumbs={Object.fromEntries(Object.entries(thumbs).map(([id, t]) => [id, t.thumb]))}
+      taskSchema={taskSchema}
       payments={payments}
       todayISO={localDateISO()}
-      schemaReady={schemaReady}
+      schema={schema}
       currency={currency}
     />
   );

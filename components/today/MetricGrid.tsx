@@ -12,14 +12,24 @@ export default function MetricGrid({
   cards,
   money,
 }: {
-  cards: MetricCard[];
+  cards: (MetricCard & { manual?: boolean })[];
   money: (n: number, currency?: string) => string;
 }) {
   return (
     <section className="metric-grid">
       {cards.map((card) => (
-        <article className={`card metric-card${card.tone ? ` ${card.tone}` : ""}`} key={card.key}>
-          <span className="mx-label">{card.label}</span>
+        <article
+          className={`card metric-card${card.tone ? ` ${card.tone}` : ""}${card.manual ? " manual" : ""}`}
+          key={card.key}
+        >
+          <span className="mx-label">
+            {card.label}
+            {card.manual && (
+              <span className="manual-flag" title="Set from chat — not a calculation">
+                manual
+              </span>
+            )}
+          </span>
           <div className="mx-value">{card.display}</div>
           {card.splits.length > 0 && (
             <div className="mx-splits">

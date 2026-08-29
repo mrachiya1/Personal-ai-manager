@@ -8,7 +8,10 @@ export const dynamic = "force-dynamic";
 const NOTION_VERSION = "2022-06-28";
 
 async function notion(path: string, token: string, init: RequestInit = {}) {
-  const res = await fetch(`https://api.notion.com/v1${path}`, {
+  // Same overridable base as the rest of the Notion layer, so the harness
+  // can exercise the schema path instead of skipping it.
+  const base = process.env["NOTION_API_BASE_URL"] || "https://api.notion.com/v1";
+  const res = await fetch(`${base}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,

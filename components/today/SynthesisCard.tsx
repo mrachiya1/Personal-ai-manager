@@ -87,6 +87,13 @@ export default function SynthesisCard({
             </dd>
           </div>
           <div>
+            <dt>Tithi</dt>
+            <dd>
+              {energy.moon.tithi.paksha} {energy.moon.tithi.name}
+              {energy.moon.isPurnima ? " · Poya" : ""}
+            </dd>
+          </div>
+          <div>
             <dt>Phase</dt>
             <dd>
               {energy.moon.phaseName} · {Math.round(energy.moon.illumination * 100)}% lit

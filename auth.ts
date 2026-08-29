@@ -25,6 +25,7 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
+import Apple from "next-auth/providers/apple";
 import Credentials from "next-auth/providers/credentials";
 import { authenticate, clearAttempts, normaliseEmail, recordAttempt, tooManyAttempts } from "@/lib/accounts";
 
@@ -81,6 +82,15 @@ if (googleId && googleSecret) {
 if (githubId && githubSecret) {
   providers.push(GitHub({ clientId: githubId, clientSecret: githubSecret, allowDangerousEmailAccountLinking: true }));
 }
+// Apple lights up the moment its keys exist, same as the others. Its
+// "secret" is a signed JWT you generate from a .p8 key in the Apple
+// developer console and rotate every six months — worth knowing before you
+// go looking for a plain string to paste.
+const appleId = process.env["AUTH_APPLE_ID"];
+const appleSecret = process.env["AUTH_APPLE_SECRET"];
+if (appleId && appleSecret) {
+  providers.push(Apple({ clientId: appleId, clientSecret: appleSecret, allowDangerousEmailAccountLinking: true }));
+}
 
 /** True when any sign-in method is configured. */
 export const AUTH_ENABLED = providers.length > 0;
@@ -89,6 +99,7 @@ export const AUTH_ENABLED = providers.length > 0;
 export const AVAILABLE_PROVIDERS: { id: string; name: string }[] = [
   ...(googleId && googleSecret ? [{ id: "google", name: "Google" }] : []),
   ...(githubId && githubSecret ? [{ id: "github", name: "GitHub" }] : []),
+  ...(appleId && appleSecret ? [{ id: "apple", name: "Apple" }] : []),
 ];
 
 /**

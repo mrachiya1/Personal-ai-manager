@@ -5,6 +5,7 @@
 // Every figure here is derived from a record; nothing is estimated.
 
 import type { ClientRecord, Company, Payment, Project, Task, TeamMember } from "./types";
+import { buildTaskTree, type TaskTree } from "./taskTree";
 
 /* ================================================================== */
 /* Per-project derived fields                                          */
@@ -18,7 +19,16 @@ export interface ProjectRow {
   company?: Company;
   assignees: TeamMember[];
   tasks: Task[];
-  /** 0-100, from resolved sub-tasks. Null when the project has no tasks yet. */
+  /** The nested view of `tasks`, at whatever depth the data runs to. */
+  tree: TaskTree;
+  /**
+   * 0-100, counted over the deepest sub-items rather than the top level.
+   *
+   * A milestone with four sub-items of which none are done contributes 0/4,
+   * not 0/1 — so a project broken down two levels deep reports what is
+   * actually finished instead of what has been ticked at the top. Null when
+   * the project has no tasks yet.
+   */
   progress: number | null;
   doneCount: number;
   taskCount: number;
@@ -74,7 +84,7 @@ export function buildRows(input: {
 
   return input.projects.map((project) => {
     const tasks = input.tasks.filter((t) => t.projectId === project.id);
-    const doneCount = tasks.filter((t) => t.status === "Done").length;
+    const tree = buildTaskTree(tasks);
 
     // In Progress first, then the soonest due, then anything left. A project
     // whose "next task" is whatever happens to sort first is not telling you
@@ -92,9 +102,10 @@ export function buildRows(input: {
       company: companyById.get(project.companyId),
       assignees: project.assignedTo.map((id) => memberById.get(id)).filter(Boolean) as TeamMember[],
       tasks,
-      progress: tasks.length ? Math.round((doneCount / tasks.length) * 100) : null,
-      doneCount,
-      taskCount: tasks.length,
+      tree,
+      progress: tree.progress,
+      doneCount: tree.doneLeafCount,
+      taskCount: tree.leafCount,
       nextTask,
       payment: paymentState(project, input.payments),
       daysLeft,
@@ -141,7 +152,9 @@ export function sectionise(rows: ProjectRow[], companies: Company[]): ProjectSec
       const mine = client.filter((r) => r.project.companyId === company.id);
       return {
         key: `company:${company.id}`,
-        title: company.name,
+        // Prefixed so the two kinds of section read as different kinds at a
+        // glance rather than as two company names, one of which is odd.
+        title: `Company ${company.name}`,
         subtitle: `${mine.length} client ${mine.length === 1 ? "project" : "projects"} · ${
           new Set(mine.map((r) => r.client!.id)).size
         } ${new Set(mine.map((r) => r.client!.id)).size === 1 ? "client" : "clients"}`,
@@ -168,8 +181,8 @@ export function sectionise(rows: ProjectRow[], companies: Company[]): ProjectSec
   if (personal.length) {
     sections.push({
       key: "personal",
-      title: "Personal & internal R&D",
-      subtitle: `${personal.length} self-directed ${personal.length === 1 ? "project" : "projects"} · no client, no invoice`,
+      title: "Personal project",
+      subtitle: `${personal.length} self-directed ${personal.length === 1 ? "project" : "projects"} · internal R&D, no client or invoice`,
       kind: "personal",
       rows: personal,
     });
@@ -213,7 +226,7 @@ export interface ProjectsMetrics {
 const PERSONAL_KEY = "personal";
 
 function entityOf(row: ProjectRow): { key: string; label: string } {
-  if (!row.client) return { key: PERSONAL_KEY, label: "Personal & R&D" };
+  if (!row.client) return { key: PERSONAL_KEY, label: "Personal R&D" };
   return row.company
     ? { key: row.company.id, label: row.company.name }
     : { key: "unfiled", label: "No company" };

@@ -70,6 +70,9 @@ export interface Project {
   completionFeel?: string;
   completionNote?: string;
   completedOn?: string;
+
+  /** Whatever else is on the Notion page — user-added columns, read by name. */
+  custom: Record<string, string | number | boolean | string[] | undefined>;
 }
 
 export interface ProjectFile {
@@ -90,6 +93,27 @@ export interface Task {
   status: TaskStatus;
   dueDate?: string;
   tags?: string[];
+  /**
+   * The task this one sits under, if any.
+   *
+   * A task with no parent is a milestone directly under its project; a task
+   * with one is a sub-task at whatever depth its chain runs to. Nesting is a
+   * property of the data rather than three named levels in the code, so
+   * "Showreel -> Shot 01 -> Lighting -> Turntable pass" needs no schema change.
+   */
+  parentTaskId?: string;
+  startDate?: string;
+  priority?: string;
+  assignedTo: string[];
+  /** Resource links and attachments on this task specifically. */
+  files: AttachedFile[];
+  /** The preview image stored in Notion, when there is one. */
+  thumbnail?: AttachedFile;
+}
+
+export interface AttachedFile {
+  name: string;
+  url: string;
 }
 
 export type ClientRelationship = "Lead" | "Active" | "VIP" | "Past";

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAccounts, getCompanies, getProjects, notionConnected } from "@/lib/notion";
-import { resolveOpenRouter, openRouterHeaders } from "@/lib/ai";
+import { resolveOpenRouter, openRouterHeaders, openRouterUrl } from "@/lib/ai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
 
   let extracted: Record<string, any>;
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const res = await fetch(openRouterUrl(), {
       method: "POST",
       headers: openRouterHeaders(ai.apiKey, "Orex OS Slip Scan"),
       body: JSON.stringify({

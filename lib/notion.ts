@@ -11,6 +11,9 @@
 // (••• menu → Connections → your integration). Without that share step the
 // API key alone will get 404s, even though it's valid.
 
+import { REQUIRED_PROJECT_PROPS, propertySchema } from "./projectSchema";
+import { REQUIRED_TASK_PROPS, taskPropertySchema, TASK_PRIORITY_OPTIONS } from "./taskSchema";
+import { customProperties, readCustomValue, writeCustomValue, type CustomProperty } from "./customProps";
 import type {
   Company,
   CoreRule,
@@ -54,7 +57,7 @@ export async function notionConnected(): Promise<boolean> {
 
 class NotionError extends Error {}
 
-async function notionFetch(path: string, init: RequestInit = {}) {
+export async function notionFetch(path: string, init: RequestInit = {}) {
   const NOTION_API_KEY = await getNotionToken();
   if (!NOTION_API_KEY) {
     throw new NotionError(
@@ -284,8 +287,137 @@ async function _getProjects(): Promise<Project[]> {
     completionFeel: select(p.properties, "Completion Feel") || undefined,
     completionNote: richText(p.properties, "Completion Note"),
     completedOn: dateStart(p.properties, "Completed On"),
+    // Every property this screen does not already own, read by name. A column
+    // someone adds in Notion shows up here without a code change.
+    custom: Object.fromEntries(
+      Object.entries(p.properties as Record<string, unknown>)
+        .filter(([name]) => !RESERVED_FOR_PROJECTS.has(name))
+        .map(([name, prop]) => [name, readCustomValue(prop)])
+    ),
     files: files(p.properties, "Files"),
   }));
+}
+
+/* ================================================================== */
+/* Schema auto-sync                                                     */
+/* ================================================================== */
+
+/**
+ * Archives a project and everything hanging off it.
+ *
+ * Notion has no hard delete over the API — `archived: true` is what the UI's
+ * own trash button does, so the page is recoverable from Notion's trash for
+ * thirty days. That is a better guarantee than this app could offer on its
+ * own, and worth saying out loud in the confirm dialog rather than promising
+ * a permanence that isn't real.
+ *
+ * Tasks are archived first: if the project went first and a task then failed,
+ * you would be left with orphan tasks pointing at a page that is gone.
+ */
+export async function archiveProject(id: string): Promise<{ tasksArchived: number }> {
+  const tasks = await getTasks();
+  const mine = tasks.filter((t) => t.projectId === id);
+  for (const task of mine) {
+    await notionFetch(`/pages/${task.id}`, { method: "PATCH", body: JSON.stringify({ archived: true }) });
+  }
+  await notionFetch(`/pages/${id}`, { method: "PATCH", body: JSON.stringify({ archived: true }) });
+  return { tasksArchived: mine.length };
+}
+
+/** Archives one task. Notion has no hard delete; the page goes to the trash. */
+export async function archiveTask(id: string) {
+  return notionFetch(`/pages/${id}`, { method: "PATCH", body: JSON.stringify({ archived: true }) });
+}
+
+/** The property names getProjects maps explicitly; everything else is custom. */
+const RESERVED_FOR_PROJECTS = new Set([
+  "Name", "Company", "Client", "Category", "Status", "Description", "Deadline",
+  "Render Priority", "Estimated Render Time (hrs)", "Assigned To", "Start Date",
+  "Value", "Headline", "Client Requests", "Last Reviewed", "Reviewed By", "Files",
+  "Completion Feel", "Completion Note", "Completed On",
+]);
+
+export interface ProjectSchemaState {
+  /** Properties this run actually created. Empty on every later render. */
+  added: string[];
+  /** Live select options, so the pickers offer the workspace's own words. */
+  statusOptions: string[];
+  categoryOptions: string[];
+  priorityOptions: string[];
+  /** User-added columns, so the table can render them. */
+  custom: CustomProperty[];
+  /** Set when the sync could not run — the screen falls back to defaults. */
+  problem?: string;
+}
+
+/**
+ * Brings the Projects database up to what the screen needs, then reports back
+ * what the database actually offers.
+ *
+ * Runs on every render of the Projects page rather than behind a button. It
+ * is strictly additive — it POSTs properties that are missing and never
+ * renames, retypes or removes one — so the worst case is a column appearing
+ * in Notion that nobody uses, and the alternative was a permanent "your
+ * schema is out of date" banner that told you about work you then had to go
+ * and do by hand.
+ *
+ * Select options come back from the same read, which is what lets the status
+ * and category pickers speak the workspace's own vocabulary instead of a
+ * hardcoded list that may not exist in the database at all.
+ */
+export async function ensureProjectSchema(): Promise<ProjectSchemaState> {
+  const fallback: ProjectSchemaState = {
+    added: [],
+    statusOptions: ["Idea", "Planning", "Production", "Rendering-Ready", "Delivered"],
+    categoryOptions: [],
+    priorityOptions: ["High", "Medium", "Low"],
+    custom: [],
+  };
+
+  try {
+    const map = await dbMap();
+    if (!map.projects) return { ...fallback, problem: "No Projects database mapped yet." };
+
+    const db = (await notionFetch(`/databases/${map.projects}`)) as {
+      properties?: Record<string, { type: string; select?: { options?: { name: string }[] }; multi_select?: { options?: { name: string }[] } }>;
+    };
+    const existing = db.properties || {};
+
+    const missing = REQUIRED_PROJECT_PROPS.filter((prop) => !existing[prop.name]);
+    // A relation needs somewhere to point. Without those mappings the rest
+    // still gets added; the relations wait rather than failing the batch.
+    const addable = missing.filter((prop) => prop.kind !== "relation" || (map.clients && map.team));
+
+    let added: string[] = [];
+    if (addable.length) {
+      const properties: Record<string, unknown> = {};
+      for (const prop of addable) {
+        properties[prop.name] = propertySchema(prop, { clients: map.clients, team: map.team });
+      }
+      await notionFetch(`/databases/${map.projects}`, {
+        method: "PATCH",
+        body: JSON.stringify({ properties }),
+      });
+      added = addable.map((p) => p.name);
+    }
+
+    const options = (name: string, kind: "select" | "multi_select") =>
+      (existing[name]?.[kind]?.options ?? []).map((o) => o.name).filter(Boolean);
+
+    const status = options("Status", "select");
+    const priority = options("Render Priority", "select");
+    const category = options("Category", "multi_select");
+
+    return {
+      added,
+      statusOptions: status.length ? status : fallback.statusOptions,
+      priorityOptions: priority.length ? priority : fallback.priorityOptions,
+      categoryOptions: category,
+      custom: customProperties(existing as Parameters<typeof customProperties>[0]),
+    };
+  } catch (err) {
+    return { ...fallback, problem: err instanceof Error ? err.message : "Couldn't read the Projects schema." };
+  }
 }
 
 export interface ProjectUpdate {
@@ -308,6 +440,8 @@ export interface ProjectUpdate {
   completionFeel: string;
   completionNote: string;
   completedOn: string;
+  /** name -> { type, value } for user-added columns. */
+  custom: Record<string, { type: string; value: string | number | boolean | string[] | undefined }>;
 }
 
 /**
@@ -355,10 +489,22 @@ function projectProperties(input: Partial<ProjectUpdate>): Record<string, unknow
   if (input.completionNote !== undefined) properties["Completion Note"] = text(input.completionNote);
   if (input.completedOn !== undefined) properties["Completed On"] = date(input.completedOn);
 
+  // User-added columns, written by name and type. Kept last so a custom
+  // property can never shadow one of the screen's own.
+  if (input.custom) {
+    for (const [name, entry] of Object.entries(input.custom)) {
+      if (RESERVED_FOR_PROJECTS.has(name)) continue;
+      properties[name] = writeCustomValue(entry.type, entry.value);
+    }
+  }
+
   return properties;
 }
 
 export async function createProject(input: Partial<ProjectUpdate> & { name: string }) {
+  // Returns the created page, so the caller can immediately hang sub-tasks
+  // off it. Without the id back, "create a project with three milestones" is
+  // two disconnected round trips and a guess.
   return notionFetch("/pages", {
     method: "POST",
     body: JSON.stringify({
@@ -379,14 +525,26 @@ export async function updateProject(id: string, input: Partial<ProjectUpdate>) {
 
 async function _getTasks(): Promise<Task[]> {
   const pages = await queryAll((await dbMap()).tasks);
-  return pages.map((p) => ({
-    id: p.id,
-    title: title(p.properties, "Title"),
-    projectId: relationIds(p.properties, "Project")[0] || "",
-    status: (select(p.properties, "Status") as Task["status"]) || "Backlog",
-    dueDate: dateStart(p.properties, "Due Date"),
-    tags: multiSelect(p.properties, "Tags"),
-  }));
+  return pages.map((p) => {
+    const thumbs = files(p.properties, "Thumbnail");
+    return {
+      id: p.id,
+      title: title(p.properties, "Title"),
+      projectId: relationIds(p.properties, "Project")[0] || "",
+      status: (select(p.properties, "Status") as Task["status"]) || "Backlog",
+      dueDate: dateStart(p.properties, "Due Date"),
+      tags: multiSelect(p.properties, "Tags"),
+      // Absent on a database that predates ensureTaskSchema(), which is fine:
+      // every one of these reads as undefined/empty and the row degrades to
+      // what it looked like before rather than throwing.
+      parentTaskId: relationIds(p.properties, "Parent Task")[0] || undefined,
+      startDate: dateStart(p.properties, "Start Date"),
+      priority: select(p.properties, "Priority") || undefined,
+      assignedTo: relationIds(p.properties, "Assigned To"),
+      files: files(p.properties, "Files").map((f) => ({ name: f.name, url: f.url })),
+      thumbnail: thumbs[0] ? { name: thumbs[0].name, url: thumbs[0].url } : undefined,
+    };
+  });
 }
 
 export async function createTask(input: {
@@ -394,6 +552,11 @@ export async function createTask(input: {
   projectId?: string;
   status?: string;
   dueDate?: string;
+  startDate?: string;
+  priority?: string;
+  assignedTo?: string[];
+  /** The task this one nests under. Any depth; there is no level limit. */
+  parentTaskId?: string;
   tags?: string[];
 }) {
   return notionFetch("/pages", {
@@ -405,6 +568,10 @@ export async function createTask(input: {
         ...(input.projectId ? { Project: { relation: [{ id: input.projectId }] } } : {}),
         Status: { select: { name: input.status || "Backlog" } },
         ...(input.dueDate ? { "Due Date": { date: { start: input.dueDate } } } : {}),
+        ...(input.startDate ? { "Start Date": { date: { start: input.startDate } } } : {}),
+        ...(input.priority ? { Priority: { select: { name: input.priority } } } : {}),
+        ...(input.parentTaskId ? { "Parent Task": { relation: [{ id: input.parentTaskId }] } } : {}),
+        ...(input.assignedTo?.length ? { "Assigned To": { relation: input.assignedTo.map((id) => ({ id })) } } : {}),
         ...(input.tags && input.tags.length ? { Tags: { multi_select: input.tags.map((t) => ({ name: t })) } } : {}),
       },
     }),
@@ -418,15 +585,71 @@ export async function createTask(input: {
  */
 export async function updateTask(
   id: string,
-  input: Partial<{ title: string; status: string; dueDate: string; projectId: string }>
+  input: Partial<{
+    title: string;
+    status: string;
+    dueDate: string;
+    startDate: string;
+    priority: string;
+    projectId: string;
+    parentTaskId: string;
+    assignedTo: string[];
+  }>
 ) {
   const properties: Record<string, unknown> = {};
   if (input.title !== undefined) properties.Title = { title: [{ text: { content: input.title } }] };
   if (input.status !== undefined) properties.Status = { select: { name: input.status } };
   if (input.dueDate !== undefined) properties["Due Date"] = { date: input.dueDate ? { start: input.dueDate } : null };
+  if (input.startDate !== undefined) properties["Start Date"] = { date: input.startDate ? { start: input.startDate } : null };
+  if (input.priority !== undefined) properties.Priority = { select: input.priority ? { name: input.priority } : null };
   if (input.projectId !== undefined)
     properties.Project = { relation: input.projectId ? [{ id: input.projectId }] : [] };
+  if (input.parentTaskId !== undefined)
+    properties["Parent Task"] = { relation: input.parentTaskId ? [{ id: input.parentTaskId }] : [] };
+  if (input.assignedTo !== undefined)
+    properties["Assigned To"] = { relation: input.assignedTo.map((rid) => ({ id: rid })) };
   return notionFetch(`/pages/${id}`, { method: "PATCH", body: JSON.stringify({ properties }) });
+}
+
+/**
+ * Adds whatever the nested Tasks view needs and the database doesn't have.
+ *
+ * Mirrors ensureProjectSchema(): additive, idempotent, and safe to call on
+ * every render of the Projects page. The self-relation is the load-bearing one
+ * — without "Parent Task" every task is a root and the tree is a flat list, so
+ * this failing has to be visible rather than silent.
+ */
+export async function ensureTaskSchema(): Promise<{ added: string[]; priorityOptions: string[]; problem?: string }> {
+  const fallback = { added: [] as string[], priorityOptions: TASK_PRIORITY_OPTIONS };
+  try {
+    const map = await dbMap();
+    if (!map.tasks) return { ...fallback, problem: "No Tasks database mapped yet." };
+
+    const db = (await notionFetch(`/databases/${map.tasks}`)) as {
+      properties?: Record<string, { type: string; select?: { options?: { name: string }[] } }>;
+    };
+    const existing = db.properties || {};
+
+    const missing = REQUIRED_TASK_PROPS.filter((prop) => !existing[prop.name]);
+    // The team relation needs a Team database to point at; the self-relation
+    // always has a target. Missing Team holds back one property, not the batch.
+    const addable = missing.filter((prop) => prop.kind !== "relation" || Boolean(map.team));
+
+    let added: string[] = [];
+    if (addable.length) {
+      const properties: Record<string, unknown> = {};
+      for (const prop of addable) {
+        properties[prop.name] = taskPropertySchema(prop, { team: map.team, tasks: map.tasks });
+      }
+      await notionFetch(`/databases/${map.tasks}`, { method: "PATCH", body: JSON.stringify({ properties }) });
+      added = addable.map((p) => p.name);
+    }
+
+    const live = (existing.Priority?.select?.options ?? []).map((o) => o.name).filter(Boolean);
+    return { added, priorityOptions: live.length ? live : TASK_PRIORITY_OPTIONS };
+  } catch (err) {
+    return { ...fallback, problem: err instanceof Error ? err.message : "Couldn't read the Tasks schema." };
+  }
 }
 
 export async function getClients(): Promise<ClientRecord[]> {
@@ -693,6 +916,26 @@ export async function createFinanceGoal(input: {
       },
     }),
   });
+}
+
+/**
+ * Moves a savings goal.
+ *
+ * A goal is a record, not a display value, so the Assistant's
+ * update_metrics_and_goals writes it through here rather than parking it in the
+ * per-day override store — "I put another 40k into the camera fund" is true
+ * tomorrow as well as today.
+ */
+export async function updateFinanceGoal(
+  id: string,
+  input: Partial<{ goal: string; targetAmount: number; currentAmount: number; deadline: string }>
+) {
+  const properties: Record<string, unknown> = {};
+  if (input.goal !== undefined) properties.Goal = { title: [{ text: { content: input.goal } }] };
+  if (input.targetAmount !== undefined) properties["Target Amount"] = { number: input.targetAmount };
+  if (input.currentAmount !== undefined) properties["Current Amount"] = { number: input.currentAmount };
+  if (input.deadline !== undefined) properties.Deadline = { date: input.deadline ? { start: input.deadline } : null };
+  return notionFetch(`/pages/${id}`, { method: "PATCH", body: JSON.stringify({ properties }) });
 }
 
 export async function getWishlistItems(): Promise<WishlistItem[]> {

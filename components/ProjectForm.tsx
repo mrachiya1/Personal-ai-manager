@@ -6,11 +6,22 @@ import type { ClientRecord, Company, Project, TeamMember } from "@/lib/types";
 
 const STATUSES = ["Idea", "Planning", "Production", "Rendering-Ready", "Delivered"];
 const PRIORITIES = ["High", "Medium", "Low"];
+const SEED_CATEGORIES = ["Hotel", "3D Motion", "SaaS", "Branding", "Web", "Film", "Internal"];
+
+/** The value the company selector uses for self-directed work. */
+const PERSONAL = "__personal__";
+
+export interface DraftTask {
+  title: string;
+  dueDate: string;
+}
 
 interface FormState {
   name: string;
   companyId: string;
   clientId: string;
+  category: string[];
+  tasks: DraftTask[];
   status: string;
   headline: string;
   description: string;
@@ -27,6 +38,8 @@ function emptyState(p?: Project): FormState {
     name: p?.name || "",
     companyId: p?.companyId || "",
     clientId: p?.clientId || "",
+    category: p?.category || [],
+    tasks: [],
     status: p?.status || "Idea",
     headline: p?.headline || "",
     description: p?.description || "",
@@ -55,6 +68,7 @@ function payload(state: FormState) {
     estimatedRenderHours: state.estimatedRenderHours ? Number(state.estimatedRenderHours) : undefined,
     value: state.value ? Number(state.value) : undefined,
     assignedTo: state.assignedTo,
+    category: state.category,
   };
 }
 
@@ -64,12 +78,18 @@ function FormBody({
   companies,
   clients = [],
   team = [],
+  categories = SEED_CATEGORIES,
+  onTasksChange,
 }: {
   state: FormState;
   setState: (s: FormState) => void;
   companies: Company[];
   clients?: ClientRecord[];
   team?: TeamMember[];
+  categories?: string[];
+  /** Present only on create — you cannot seed milestones onto a project that
+   *  already has its own. */
+  onTasksChange?: boolean;
 }) {
   // Picking a company narrows the client list to that company's clients, which
   // is what makes the folder tree (Company → Client → Project) line up.
@@ -111,18 +131,26 @@ function FormBody({
           <select
             value={state.companyId}
             onChange={(e) => {
-              const companyId = e.target.value;
+              const picked = e.target.value;
+              // Self-directed work is defined by having no client — the same
+              // rule the Projects screen groups on — so choosing it clears
+              // the client rather than setting a flag that could disagree.
+              if (picked === PERSONAL) {
+                setState({ ...state, companyId: "", clientId: "" });
+                return;
+              }
               // Drop a client that doesn't belong to the newly chosen company,
               // rather than filing the project under a mismatched folder.
               const keep = clients.find((c) => c.id === state.clientId);
-              const clientId = !companyId || !keep || keep.companyId === companyId ? state.clientId : "";
-              setState({ ...state, companyId, clientId });
+              const clientId = !picked || !keep || keep.companyId === picked ? state.clientId : "";
+              setState({ ...state, companyId: picked, clientId });
             }}
           >
             <option value="">—</option>
             {companies.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
+            <option value={PERSONAL}>Personal / internal R&amp;D</option>
           </select>
         </div>
         <div className="form-field">
@@ -179,6 +207,80 @@ function FormBody({
         </div>
       )}
       <div className="form-field">
+        <label>Category</label>
+        <div className="form-chips">
+          {categories.map((c) => (
+            <button
+              key={c}
+              type="button"
+              className={`form-chip${state.category.includes(c) ? " on" : ""}`}
+              onClick={() =>
+                setState({
+                  ...state,
+                  category: state.category.includes(c)
+                    ? state.category.filter((x) => x !== c)
+                    : [...state.category, c],
+                })
+              }
+              aria-pressed={state.category.includes(c)}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {onTasksChange && (
+        <div className="form-field">
+          <label>First milestones</label>
+          <div className="draft-tasks">
+            {state.tasks.map((task, i) => (
+              <div className="draft-task" key={i}>
+                <input
+                  value={task.title}
+                  placeholder={`Milestone ${i + 1} — e.g. Wireframe`}
+                  onChange={(e) => {
+                    const tasks = [...state.tasks];
+                    tasks[i] = { ...tasks[i], title: e.target.value };
+                    setState({ ...state, tasks });
+                  }}
+                />
+                <input
+                  type="date"
+                  value={task.dueDate}
+                  onChange={(e) => {
+                    const tasks = [...state.tasks];
+                    tasks[i] = { ...tasks[i], dueDate: e.target.value };
+                    setState({ ...state, tasks });
+                  }}
+                />
+                <button
+                  type="button"
+                  className="draft-remove"
+                  onClick={() => setState({ ...state, tasks: state.tasks.filter((_, x) => x !== i) })}
+                  aria-label={`Remove milestone ${i + 1}`}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            {state.tasks.length < 5 && (
+              <button
+                type="button"
+                className="draft-add"
+                onClick={() => setState({ ...state, tasks: [...state.tasks, { title: "", dueDate: "" }] })}
+              >
+                + Add a milestone
+              </button>
+            )}
+          </div>
+          <p className="draft-hint">
+            Created as tasks against this project, so the progress bar has something to measure from day one. Up to five.
+          </p>
+        </div>
+      )}
+
+      <div className="form-field">
         <label>Description</label>
         <textarea value={state.description} onChange={(e) => setState({ ...state, description: e.target.value })} />
       </div>
@@ -216,16 +318,18 @@ function FormBody({
   );
 }
 
-async function save(url: string, method: string, body: unknown) {
+async function save(url: string, method: string, body: unknown): Promise<{ id?: string }> {
   const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Save failed");
+  return data;
 }
 
 export function NewProjectButton({
   companies,
   clients = [],
   team = [],
+  categories,
   defaultCompanyId,
   defaultClientId,
   defaultStatus,
@@ -235,6 +339,8 @@ export function NewProjectButton({
   companies: Company[];
   clients?: ClientRecord[];
   team?: TeamMember[];
+  /** The workspace's own category vocabulary, read off the Notion schema. */
+  categories?: string[];
   defaultCompanyId?: string;
   defaultClientId?: string;
   defaultStatus?: string;
@@ -259,7 +365,35 @@ export function NewProjectButton({
     setSaving(true);
     setError(null);
     try {
-      await save("/api/projects", "POST", payload(state));
+      const created = await save("/api/projects", "POST", payload(state));
+
+      // Milestones are created after the project, because they need its id.
+      // Sequential rather than parallel: Notion rate-limits at about three
+      // requests a second, and five at once is exactly the shape that trips
+      // it. A milestone that fails is reported without losing the project.
+      const wanted = state.tasks.filter((t) => t.title.trim());
+      const failed: string[] = [];
+      if (created?.id && wanted.length) {
+        for (const task of wanted) {
+          try {
+            await save("/api/tasks", "POST", {
+              title: task.title.trim(),
+              projectId: created.id,
+              status: "Backlog",
+              dueDate: task.dueDate || undefined,
+            });
+          } catch {
+            failed.push(task.title.trim());
+          }
+        }
+      }
+      if (failed.length) {
+        setError(`Project created, but these milestones didn't save: ${failed.join(", ")}`);
+        setSaving(false);
+        router.refresh();
+        return;
+      }
+
       setOpen(false);
       setState({
         ...emptyState(),
@@ -303,7 +437,7 @@ export function NewProjectButton({
             <h2>New Project</h2>
             <div className="modal-sub">Writes straight to your Notion Projects database</div>
             <form onSubmit={submit}>
-              <FormBody state={state} setState={setState} companies={companies} clients={clients} team={team} />
+              <FormBody state={state} setState={setState} companies={companies} clients={clients} team={team} categories={categories} onTasksChange />
               {error && <div className="form-error">{error}</div>}
               <div className="form-actions">
                 <button type="button" className="btn-discard" onClick={() => setOpen(false)}>Cancel</button>

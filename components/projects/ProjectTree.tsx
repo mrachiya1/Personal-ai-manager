@@ -5,6 +5,8 @@ import type { ProjectRow, ProjectSection } from "@/lib/projectsAnalytics";
 import type { Task, TeamMember } from "@/lib/types";
 import {
   DateCell,
+  Popover,
+  navAttrs,
   MultiPickCell,
   NumberCell,
   SelectCell,
@@ -12,23 +14,56 @@ import {
   type CellNav,
   type PickOption,
 } from "./editable";
-import { AvatarStack, avatarColor, initials } from "./cells";
+import { avatarColor } from "./cells";
+import AddPropertyButton from "./AddPropertyButton";
+import Thumbnail, { categoryIcon } from "./Thumbnail";
+import TaskTree, { type TaskTreeHandlers } from "./TaskTree";
 
-export const STATUSES = ["Idea", "Planning", "Production", "Rendering-Ready", "Delivered"];
-export const PRIORITIES = ["High", "Medium", "Low"];
-export const TASK_STATUSES = ["Backlog", "In Progress", "Blocked", "Done"];
+/**
+ * Assignees as coloured dots.
+ *
+ * The column is 88px wide; two-letter initials at that size land under the
+ * 10px legibility floor, so the dot carries identity by colour and the name
+ * is on the title and the accessible label. Beyond three, a count — six
+ * overlapping circles is not information.
+ */
+function AssignedDots({ people }: { people: { id: string; label: string }[] }) {
+  if (people.length === 0) return <span className="pt-assign empty">Assign</span>;
+  return (
+    <span className="pt-assign" aria-label={`Assigned to ${people.map((p) => p.label).join(", ")}`}>
+      {people.slice(0, 3).map((p) => (
+        <span key={p.id} className="pt-dot" style={{ background: avatarColor(p.id) }} title={p.label} />
+      ))}
+      {people.length > 3 && <span className="pt-dot-more">+{people.length - 3}</span>}
+    </span>
+  );
+}
 
-const statusBadge: Record<string, string> = {
-  Idea: "badge pending",
-  Planning: "badge pending",
-  Production: "badge med",
-  "Rendering-Ready": "badge high",
-  Delivered: "badge low",
-  Backlog: "badge pending",
-  "In Progress": "badge med",
-  Blocked: "badge overdue",
-  Done: "badge paid",
-};
+
+/**
+ * A badge tone for any status word, including ones this app has never seen.
+ *
+ * The status vocabulary belongs to the workspace's Notion database, not to
+ * this file — one person's "Production" is another's "Active". Matching on
+ * meaning rather than an exact string means a renamed status keeps its colour
+ * instead of silently falling back to grey.
+ */
+export function statusBadge(value: string): string {
+  const v = value.toLowerCase();
+  if (/(done|delivered|complete|shipped|paid|live)/.test(v)) return "badge paid";
+  if (/(block|stuck|hold|overdue|risk)/.test(v)) return "badge overdue";
+  if (/(review|check|qa|approval|pending|render)/.test(v)) return "badge high";
+  if (/(active|progress|production|building|doing)/.test(v)) return "badge med";
+  return "badge pending"; // idea, backlog, planning — anything not started
+}
+
+/** MM/DD/YYYY, as the design specifies. */
+function shortDate(iso?: string): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", timeZone: "UTC" });
+}
 
 const paymentBadge: Record<string, string> = {
   Paid: "badge paid",
@@ -58,87 +93,209 @@ function money(n: number | undefined, currency: string) {
   return `${symbol}${n.toLocaleString()}`;
 }
 
+export interface TreeOptions {
+  /** User-added Notion columns, rendered after the built-in ones. */
+  custom: import("@/lib/customProps").CustomProperty[];
+  clientOptions: string[];
+  categoryOptions: PickOption[];
+  teamOptions: PickOption[];
+  statusOptions: string[];
+  priorityOptions: string[];
+  currency: string;
+}
+
 export interface TreeHandlers {
   patch: (projectId: string, changes: Record<string, unknown>, body: Record<string, unknown>) => void;
   toggleTask: (task: Task) => void;
   patchTask: (task: Task, changes: Partial<Task>, body: Record<string, unknown>) => void;
   openResources: (row: ProjectRow) => void;
   requestCompletion: (row: ProjectRow) => void;
+  requestDelete: (row: ProjectRow) => void;
+  addTask: TaskTreeHandlers["addTask"];
+  removeTask: TaskTreeHandlers["removeTask"];
+  /** Locally-stored previews, keyed by project or task page id. */
+  thumbs: Record<string, string>;
 }
 
 /* ------------------------------------------------------------------ */
-/* Sub-task checklist                                                  */
+/* Custom property cells                                               */
 /* ------------------------------------------------------------------ */
 
-function TaskList({
-  row,
-  handlers,
-  baseRow,
+/**
+ * One user-added column.
+ *
+ * Each Notion type gets the editor that matches it rather than a text box for
+ * everything — a checkbox you have to type "true" into is not an editor. The
+ * types Notion computes (formula, rollup, created time) render read-only,
+ * because writing to them is not a thing the API allows and a cell that looks
+ * editable and silently fails is worse than one that plainly isn't.
+ */
+function CustomCell({
+  prop,
+  value,
+  onSave,
+  nav,
 }: {
-  row: ProjectRow;
-  handlers: TreeHandlers;
-  baseRow: number;
+  prop: import("@/lib/customProps").CustomProperty;
+  value: string | number | boolean | string[] | undefined;
+  onSave: (v: string | number | boolean | string[] | undefined) => void;
+  nav: CellNav;
 }) {
-  if (row.tasks.length === 0) {
-    return (
-      <div className="pt-detail">
-        <div className="pt-empty">
-          No sub-tasks yet. Add them in Notion against this project and the progress line fills itself.
-        </div>
-      </div>
-    );
+  if (!prop.editable) {
+    const shown = Array.isArray(value) ? value.join(", ") : value === undefined ? "—" : String(value);
+    return <span className="pt-muted" title="Notion computes this — not editable here">{shown}</span>;
   }
 
-  return (
-    <div className="pt-detail">
-      <div className="pt-detail-head">
-        <span>Sub-tasks</span>
-        <span className="pt-detail-count">
-          {row.doneCount}/{row.taskCount} done
-        </span>
-      </div>
-      <ul className="pt-tasks">
-        {row.tasks.map((task, i) => (
-          <li className={`pt-task${task.status === "Done" ? " done" : ""}`} key={task.id}>
-            <button
-              className={`pt-check${task.status === "Done" ? " on" : ""}`}
-              onClick={() => handlers.toggleTask(task)}
-              aria-pressed={task.status === "Done"}
-              aria-label={`Mark ${task.title} ${task.status === "Done" ? "not done" : "done"}`}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m5 13 4 4L19 7" />
+  switch (prop.type) {
+    case "number":
+      return (
+        <NumberCell
+          value={typeof value === "number" ? value : undefined}
+          onSave={(v) => onSave(v)}
+          nav={nav}
+        />
+      );
+    case "date":
+      return (
+        <DateCell
+          value={typeof value === "string" ? value : undefined}
+          format={shortDate}
+          placeholder="—"
+          onSave={(v) => onSave(v)}
+          nav={nav}
+        />
+      );
+    case "checkbox":
+      return (
+        <button
+          className={`pt-check standalone${value ? " on" : ""}`}
+          onClick={() => onSave(!value)}
+          aria-pressed={Boolean(value)}
+          aria-label={`${prop.name}: ${value ? "yes" : "no"}`}
+          {...navAttrs(nav)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSave(!value); }
+          }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m5 13 4 4L19 7" />
+          </svg>
+        </button>
+      );
+    case "select":
+    case "status":
+      return (
+        <SelectCell
+          value={typeof value === "string" ? value : undefined}
+          options={prop.options ?? []}
+          heading={prop.name}
+          onSave={(v) => onSave(v)}
+          render={(v) => <span className="type-pill">{v}</span>}
+          nav={nav}
+        />
+      );
+    case "multi_select":
+      return (
+        <MultiPickCell
+          selected={Array.isArray(value) ? value : []}
+          options={(prop.options ?? []).map((o) => ({ id: o, label: o }))}
+          heading={prop.name}
+          placeholder="—"
+          onSave={(ids) => onSave(ids)}
+          renderClosed={(chosen) => (
+            <span className="pt-cats">
+              <span className="type-pill">{chosen[0].label}</span>
+              {chosen.length > 1 && <span className="cell-muted">+{chosen.length - 1}</span>}
+            </span>
+          )}
+          nav={nav}
+        />
+      );
+    case "url":
+    case "email":
+    case "phone_number": {
+      const text = typeof value === "string" ? value : "";
+      const href = prop.type === "url" ? text : prop.type === "email" ? `mailto:${text}` : `tel:${text}`;
+      return (
+        <span className="pt-linked">
+          <TextCell value={text} onSave={(v) => onSave(v)} placeholder="—" nav={nav} />
+          {text && (
+            <a href={href} target="_blank" rel="noreferrer" className="pt-linked-go" aria-label={`Open ${text}`}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7 17 17 7M9 7h8v8" />
               </svg>
-            </button>
-            <span className="pt-task-name">
-              <TextCell
-                value={task.title}
-                onSave={(title) => handlers.patchTask(task, { title }, { title })}
-                nav={{ row: baseRow, col: 100 + i * 3 }}
-              />
-            </span>
-            <span className="pt-task-due">
-              <DateCell
-                value={task.dueDate}
-                placeholder="No date"
-                onSave={(dueDate) => handlers.patchTask(task, { dueDate }, { dueDate })}
-                nav={{ row: baseRow, col: 101 + i * 3 }}
-              />
-            </span>
-            <span className="pt-task-status">
-              <SelectCell
-                value={task.status}
-                options={TASK_STATUSES}
-                allowEmpty={false}
-                heading="Task status"
-                onSave={(status) => handlers.patchTask(task, { status: status as Task["status"] }, { status })}
-                render={(v) => <span className={statusBadge[v] ?? "badge pending"}>{v}</span>}
-                nav={{ row: baseRow, col: 102 + i * 3 }}
-              />
-            </span>
-          </li>
-        ))}
-      </ul>
+            </a>
+          )}
+        </span>
+      );
+    }
+    case "people":
+    case "files":
+      // Both need a picker this table does not have — a Notion member list, or
+      // an upload flow that already lives in the resources modal.
+      return (
+        <span className="pt-muted" title="Edit this one in Notion">
+          {Array.isArray(value) && value.length ? value.join(", ") : "—"}
+        </span>
+      );
+    default:
+      return (
+        <TextCell
+          value={typeof value === "string" ? value : value === undefined ? "" : String(value)}
+          onSave={(v) => onSave(v)}
+          placeholder="—"
+          nav={nav}
+        />
+      );
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Row actions                                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The per-row ··· menu.
+ *
+ * Kept out of the hover-only pattern the design suggests: a control that only
+ * exists while the pointer is over the row is unreachable by keyboard and
+ * invisible on touch, which is most of where this app is used. It is always
+ * in the DOM and simply quiet until focused or hovered.
+ */
+function RowMenu({
+  row,
+  onDelete,
+  onResources,
+}: {
+  row: ProjectRow;
+  onDelete: () => void;
+  onResources: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="pt-menu-wrap">
+      <button
+        className={`pt-menu-btn${open ? " on" : ""}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Actions for ${row.project.name}`}
+      >
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" />
+        </svg>
+      </button>
+      {open && (
+        <Popover onClose={() => setOpen(false)}>
+          <button className="ed-opt" onClick={() => { setOpen(false); onResources(); }}>
+            Resources &amp; links
+          </button>
+          <button className="ed-opt danger" onClick={() => { setOpen(false); onDelete(); }}>
+            Delete project…
+          </button>
+        </Popover>
+      )}
     </div>
   );
 }
@@ -153,10 +310,7 @@ function ProjectRowView({
   expanded,
   onToggle,
   handlers,
-  clientOptions,
-  categoryOptions,
-  teamOptions,
-  currency,
+  options,
   personal,
 }: {
   row: ProjectRow;
@@ -164,12 +318,10 @@ function ProjectRowView({
   expanded: boolean;
   onToggle: () => void;
   handlers: TreeHandlers;
-  clientOptions: string[];
-  categoryOptions: PickOption[];
-  teamOptions: PickOption[];
-  currency: string;
+  options: TreeOptions;
   personal: boolean;
 }) {
+  const { clientOptions, categoryOptions, teamOptions, statusOptions, priorityOptions, currency } = options;
   const p = row.project;
   const nav = (col: number): CellNav => ({ row: rowIndex, col });
 
@@ -200,6 +352,16 @@ function ProjectRowView({
                 <path d="m5 13 4 4L19 7" />
               </svg>
             </button>
+            <RowMenu row={row} onDelete={() => handlers.requestDelete(row)} onResources={() => handlers.openResources(row)} />
+            <span className="pt-thumb">
+              <Thumbnail
+                pageId={p.id}
+                name={p.name}
+                src={handlers.thumbs[p.id] || p.files.find((f) => /\.(png|jpe?g|webp|gif|avif)$/i.test(f.name))?.url}
+                category={categoryIcon(p.category)}
+                size={40}
+              />
+            </span>
             <div className="pt-name-text">
               <TextCell
                 value={p.name}
@@ -213,9 +375,10 @@ function ProjectRowView({
         </td>
 
         {/* 1 — start */}
-        <td>
+        <td data-label="Start">
           <DateCell
             value={p.startDate}
+            format={shortDate}
             placeholder="Start"
             onSave={(startDate) => handlers.patch(p.id, { startDate }, { startDate })}
             nav={nav(1)}
@@ -223,9 +386,10 @@ function ProjectRowView({
         </td>
 
         {/* 2 — deadline */}
-        <td>
+        <td data-label="Deadline">
           <DateCell
             value={p.deadline}
+            format={shortDate}
             placeholder="Deadline"
             tone={row.urgency}
             onSave={(deadline) => handlers.patch(p.id, { deadline }, { deadline })}
@@ -239,7 +403,7 @@ function ProjectRowView({
         </td>
 
         {/* 3 — client, or purpose for personal work */}
-        <td>
+        <td data-label={personal ? "Purpose" : "Client"}>
           {personal ? (
             <TextCell
               value={p.headline || ""}
@@ -266,7 +430,7 @@ function ProjectRowView({
         </td>
 
         {/* 4 — category */}
-        <td>
+        <td data-label="Category">
           <MultiPickCell
             selected={p.category}
             options={categoryOptions}
@@ -284,7 +448,7 @@ function ProjectRowView({
         </td>
 
         {/* 5 — assigned */}
-        <td>
+        <td data-label="Assigned">
           <MultiPickCell
             selected={p.assignedTo}
             options={teamOptions}
@@ -292,16 +456,16 @@ function ProjectRowView({
             searchable
             placeholder="Assign"
             onSave={(assignedTo) => handlers.patch(p.id, { assignedTo }, { assignedTo })}
-            renderClosed={(chosen) => <AvatarStack people={chosen} max={3} />}
+            renderClosed={(chosen) => <AssignedDots people={chosen} />}
             nav={nav(5)}
           />
         </td>
 
         {/* 6 — status */}
-        <td>
+        <td data-label="Status">
           <SelectCell
             value={p.status}
-            options={STATUSES}
+            options={statusOptions}
             allowEmpty={false}
             heading="Status"
             onSave={(status) => {
@@ -311,32 +475,37 @@ function ProjectRowView({
               }
               handlers.patch(p.id, { status }, { status });
             }}
-            render={(v) => <span className={statusBadge[v] ?? "badge pending"}>{v}</span>}
+            render={(v) => <span className={statusBadge(v)}>{v}</span>}
             nav={nav(6)}
           />
         </td>
 
         {/* 7 — last update (read-only: Notion owns it) */}
-        <td className="pt-muted">{relativeTime(p.lastEditedTime)}</td>
+        <td className="pt-muted" data-label="Updated">{relativeTime(p.lastEditedTime)}</td>
 
         {/* 8 — next task */}
-        <td>
+        <td data-label="Next task">
           {row.nextTask ? (
-            <TextCell
-              value={row.nextTask.title}
-              onSave={(title) => handlers.patchTask(row.nextTask!, { title }, { title })}
-              nav={nav(8)}
-            />
+            <button
+              className="pt-next"
+              onClick={() => {
+                if (!expanded) onToggle();
+              }}
+              title={`${row.nextTask.status} — open the sub-task list`}
+            >
+              <span className={`pt-next-dot ${row.nextTask.status === "In Progress" ? "on" : ""}`} aria-hidden />
+              <span className="pt-next-title">{row.nextTask.title}</span>
+            </button>
           ) : (
             <span className="pt-muted">No open task</span>
           )}
         </td>
 
         {/* 9 — priority */}
-        <td>
+        <td data-label="Priority">
           <SelectCell
             value={p.renderPriority}
-            options={PRIORITIES}
+            options={priorityOptions}
             heading="Priority"
             onSave={(rp) => handlers.patch(p.id, { renderPriority: rp || undefined }, { renderPriority: rp })}
             render={(v) => <span className={`prio ${v.toLowerCase()}`}>{v}</span>}
@@ -345,32 +514,29 @@ function ProjectRowView({
         </td>
 
         {/* 10 — resources */}
-        <td>
+        <td data-label="Files">
           <button className="pt-res" onClick={() => handlers.openResources(row)}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
-              <path d="M14 2v6h6" />
-            </svg>
-            {p.files.length || "Add"}
+            Check here
+            {p.files.length > 0 && <span className="pt-res-count">{p.files.length}</span>}
           </button>
         </td>
 
         {/* 11 & 12 — budget and where the money is. Personal work has neither. */}
         {personal ? (
-          <td className="pt-muted" colSpan={2}>
+          <td className="pt-muted" colSpan={2} data-label="Billing">
             Internal — no billing
           </td>
         ) : (
           <>
-            <td>
+            <td data-label="Budget">
               <NumberCell
                 value={p.value}
-                prefix={currency === "LKR" ? "Rs " : "$"}
+                prefix={currency === "LKR" ? "Total Rs " : "Total $"}
                 onSave={(v) => handlers.patch(p.id, { value: v }, { value: v ?? "" })}
                 nav={nav(11)}
               />
             </td>
-            <td>
+            <td data-label="Payment">
               <span className={paymentBadge[row.payment.state] ?? "badge pending"} title={
                 row.payment.invoiced
                   ? `${money(row.payment.paid, currency)} paid of ${money(row.payment.invoiced, currency)} invoiced`
@@ -381,12 +547,31 @@ function ProjectRowView({
             </td>
           </>
         )}
+
+        {options.custom.map((prop, i) => (
+          <td key={prop.name} data-label={prop.name}>
+            <CustomCell
+              prop={prop}
+              value={p.custom?.[prop.name]}
+              nav={nav(13 + i)}
+              onSave={(v) =>
+                handlers.patch(
+                  p.id,
+                  { custom: { ...(p.custom ?? {}), [prop.name]: v } },
+                  { custom: { [prop.name]: { type: prop.type, value: v } } }
+                )
+              }
+            />
+          </td>
+        ))}
+        {/* One empty cell under the + so the header and body stay aligned. */}
+        <td className="pt-add-col" />
       </tr>
 
       {/* The progress line sits in its own zero-height row so it can span the
           whole table without fighting the cell padding above it. */}
       <tr className="pt-progress-row" aria-hidden>
-        <td colSpan={13}>
+        <td colSpan={14 + options.custom.length}>
           <div className="pt-progress" title={row.progress === null ? "No sub-tasks" : `${row.progress}% of sub-tasks done`}>
             <i
               className={row.urgency === "late" ? "late" : row.progress === 100 ? "done" : ""}
@@ -398,8 +583,15 @@ function ProjectRowView({
 
       {expanded && (
         <tr className="pt-detail-row">
-          <td colSpan={13}>
-            <TaskList row={row} handlers={handlers} baseRow={rowIndex} />
+          <td colSpan={14 + options.custom.length}>
+            <TaskTree
+              tree={row.tree}
+              projectId={row.project.id}
+              teamOptions={teamOptions}
+              thumbs={handlers.thumbs}
+              handlers={handlers}
+              baseRow={rowIndex}
+            />
           </td>
         </tr>
       )}
@@ -414,18 +606,13 @@ function ProjectRowView({
 export default function ProjectTree({
   sections,
   handlers,
-  clientOptions,
-  categoryOptions,
-  teamOptions,
-  currency,
+  options,
 }: {
   sections: ProjectSection[];
   handlers: TreeHandlers;
-  clientOptions: string[];
-  categoryOptions: PickOption[];
-  teamOptions: PickOption[];
-  currency: string;
+  options: TreeOptions;
 }) {
+  const { currency } = options;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -484,7 +671,7 @@ export default function ProjectTree({
 
             {isOpen && (
               <div className="pt-scroll">
-                <table className="pt-table">
+                <table className="pt-table" style={{ minWidth: 1398 + options.custom.length * 132 + 44 }}>
                   <colgroup>
                     <col style={{ width: 232 }} />
                     <col style={{ width: 104 }} />
@@ -499,6 +686,10 @@ export default function ProjectTree({
                     <col style={{ width: 72 }} />
                     <col style={{ width: 100 }} />
                     <col style={{ width: 106 }} />
+                    {options.custom.map((prop) => (
+                      <col key={prop.name} style={{ width: 132 }} />
+                    ))}
+                    <col style={{ width: 44 }} />
                   </colgroup>
                   <thead>
                     <tr>
@@ -514,6 +705,14 @@ export default function ProjectTree({
                       <th>Priority</th>
                       <th>Files</th>
                       <th colSpan={2}>{personal ? "Billing" : "Budget & payment"}</th>
+                      {options.custom.map((prop) => (
+                        <th key={prop.name} title={`${prop.type}${prop.editable ? "" : " — computed by Notion"}`}>
+                          {prop.name}
+                        </th>
+                      ))}
+                      <th className="pt-add-col">
+                        <AddPropertyButton />
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -534,10 +733,7 @@ export default function ProjectTree({
                             })
                           }
                           handlers={handlers}
-                          clientOptions={clientOptions}
-                          categoryOptions={categoryOptions}
-                          teamOptions={teamOptions}
-                          currency={currency}
+                          options={options}
                           personal={personal}
                         />
                       );

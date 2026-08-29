@@ -49,6 +49,16 @@ const RASI_MOOD: Record<string, { mood: string; favors: string }> = {
   Pisces: { mood: "diffuse and imaginative", favors: "concepting and look development, not contracts" },
 };
 
+/** The thirty lunar days. Purnima is the 15th, Amavasya the 30th. */
+export interface Tithi {
+  /** 1-30. */
+  number: number;
+  name: string;
+  paksha: "Shukla" | "Krishna";
+  /** How far through this tithi we are, 0-1. */
+  fraction: number;
+}
+
 export interface MoonPosition {
   /** Sidereal longitude, 0-360. */
   longitude: number;
@@ -67,6 +77,12 @@ export interface MoonPosition {
   waxing: boolean;
   mood: string;
   favors: string;
+  /** The lunar day. This, not illumination, is what names a Poya. */
+  tithi: Tithi;
+  /** True only inside the 15th tithi — the actual full-moon day. */
+  isPurnima: boolean;
+  /** True only inside the 30th tithi — the new-moon day. */
+  isAmavasya: boolean;
 }
 
 /** Days since J2000.0 (2000-01-01 12:00 UTC). */
@@ -117,6 +133,39 @@ function moonLongitude(d: number): number {
   return norm360(L + correction);
 }
 
+const TITHI_NAMES = [
+  "Pratipada", "Dvitiya", "Tritiya", "Chaturthi", "Panchami", "Shashthi", "Saptami",
+  "Ashtami", "Navami", "Dashami", "Ekadashi", "Dvadashi", "Trayodashi", "Chaturdashi",
+];
+
+/**
+ * The lunar day, from the Moon's elongation from the Sun.
+ *
+ * A tithi is exactly 12 degrees of elongation, so tithi 15 (Purnima) runs
+ * from 168 to 180 degrees and tithi 30 (Amavasya) from 348 to 360. This is
+ * the only correct way to name a full-moon day: illumination peaks at 180
+ * degrees and stays above 99% for roughly a day either side, so a
+ * brightness threshold fires on the day *after* Poya just as readily as on
+ * Poya itself — which is exactly the bug this replaces.
+ */
+function tithiOf(elongation: number): Tithi {
+  const index = Math.floor(elongation / 12); // 0-29
+  const number = index + 1;
+  const fraction = (elongation % 12) / 12;
+  const shukla = number <= 15;
+  const withinHalf = shukla ? number : number - 15;
+
+  const name =
+    withinHalf === 15 ? "Purnima" : withinHalf === 30 || number === 30 ? "Amavasya" : TITHI_NAMES[withinHalf - 1];
+
+  return {
+    number,
+    name: number === 30 ? "Amavasya" : name,
+    paksha: shukla ? "Shukla" : "Krishna",
+    fraction,
+  };
+}
+
 const PHASE_NAMES = [
   "New Moon", "Waxing Crescent", "First Quarter", "Waxing Gibbous",
   "Full Moon", "Waning Gibbous", "Last Quarter", "Waning Crescent",
@@ -133,6 +182,7 @@ export function moonPosition(at: Date = new Date()): MoonPosition {
 
   const elongation = norm360(tropical - sunLongitude(d));
   const phase = elongation / 360;
+  const tithi = tithiOf(elongation);
   const rasi = RASIS[rasiIndex];
   const tone = RASI_MOOD[rasi];
 
@@ -149,5 +199,8 @@ export function moonPosition(at: Date = new Date()): MoonPosition {
     waxing: elongation < 180,
     mood: tone.mood,
     favors: tone.favors,
+    tithi,
+    isPurnima: tithi.number === 15,
+    isAmavasya: tithi.number === 30,
   };
 }

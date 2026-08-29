@@ -40,3 +40,17 @@ export function openRouterHeaders(apiKey: string, title: string) {
     "X-Title": title,
   };
 }
+
+/**
+ * Where chat completions are sent.
+ *
+ * Read through bracket access and inside a function on purpose: the bundler
+ * inlines `process.env.FOO` at build time, so a dotted module-level constant
+ * bakes the production URL into the build and the QA harness silently talks to
+ * the real API — which is exactly the bug this codebase already hit once with
+ * the Notion base URL. Read at call time, it can be pointed at a stand-in.
+ */
+export function openRouterUrl(path = "/chat/completions"): string {
+  const base = process.env["OPENROUTER_API_BASE_URL"] || "https://openrouter.ai/api/v1";
+  return `${base}${path}`;
+}

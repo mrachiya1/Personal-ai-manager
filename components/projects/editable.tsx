@@ -338,11 +338,14 @@ export function DateCell({
   open,
   onOpenChange,
   nav,
+  format,
 }: {
   value?: string;
   onSave: (v: string) => void;
   placeholder?: string;
   tone?: "late" | "soon" | null;
+  /** How to render the date. Defaults to a readable long form. */
+  format?: (iso?: string) => string | undefined;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   nav?: CellNav;
@@ -351,9 +354,11 @@ export function DateCell({
   const isOpen = open ?? ownOpen;
   const setOpen = onOpenChange ?? setOwnOpen;
 
-  const label = value
-    ? new Date(`${value}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
-    : placeholder;
+  const label =
+    (value ? (format ? format(value) : undefined) : undefined) ??
+    (value
+      ? new Date(`${value}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
+      : placeholder);
 
   return (
     <div style={{ position: "relative" }}>

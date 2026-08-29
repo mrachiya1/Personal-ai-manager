@@ -7,8 +7,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
   try {
-    await createProject(body);
-    return NextResponse.json({ ok: true });
+    const page = (await createProject(body)) as { id?: string };
+    return NextResponse.json({ ok: true, id: page?.id });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Failed to create project" }, { status: 502 });
   }

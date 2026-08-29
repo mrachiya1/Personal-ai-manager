@@ -15,6 +15,8 @@ export default function ChatWidget() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Non-blocking note that the page underneath just changed. */
+  const [live, setLive] = useState<string | null>(null);
   const router = useRouter();
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -39,8 +41,17 @@ export default function ChatWidget() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Assistant request failed");
       setMessages((m) => [...m, { role: "assistant", content: data.reply || "", actions: data.actions }]);
-      if (data.actions?.some((a: any) => a.ok)) {
+      // The dashboard behind the popover is a server component, so a
+      // router.refresh() re-renders it in place with the new state. The chat
+      // stays open, the scroll position holds, and the corrected value appears
+      // on screen while the reply that explains it is still being read — which
+      // is the whole point of letting chat drive the UI.
+      if (data.uiChanged || data.actions?.some((a: any) => a.ok)) {
         router.refresh();
+        if (data.uiChanged) {
+          setLive("Dashboard updated");
+          window.setTimeout(() => setLive(null), 2600);
+        }
       }
     } catch (err: any) {
       setError(err.message);
@@ -64,15 +75,16 @@ export default function ChatWidget() {
           <div className="chat-panel-header">
             <div>
               <div className="chat-panel-title">Assistant</div>
-              <div className="chat-panel-sub">Can add tasks, expenses, income, payments, clients &amp; more — right from chat</div>
+              <div className="chat-panel-sub">Adds records to Notion, and can fix what today&rsquo;s dashboard is showing</div>
             </div>
             <button className="link-btn" type="button" onClick={() => setMessages([])}>Clear</button>
           </div>
           <div className="chat-panel-body">
             {messages.length === 0 && (
               <div className="chat-empty">
-                Try: &ldquo;log a Rs 2000 fuel expense from Boc My account&rdquo;, &ldquo;add a task to follow up
-                with the Irway client tomorrow&rdquo;, or &ldquo;what&rsquo;s overdue right now?&rdquo;
+                Try: &ldquo;log a Rs 2000 fuel expense from Boc My account&rdquo;, &ldquo;the greeting is wrong,
+                I&rsquo;m working nights&rdquo;, &ldquo;move the client call to 4pm&rdquo;, or &ldquo;what&rsquo;s
+                overdue right now?&rdquo;
               </div>
             )}
             {messages.map((m, i) => (
@@ -90,6 +102,11 @@ export default function ChatWidget() {
               </div>
             ))}
             {loading && <div className="chat-msg chat-msg-assistant"><div className="chat-bubble">Thinking…</div></div>}
+            {live && (
+              <div className="chat-live" role="status" aria-live="polite">
+                ↻ {live} — no reload needed
+              </div>
+            )}
             {error && <div className="form-error" style={{ margin: "8px 12px" }}>{error}</div>}
             <div ref={bottomRef} />
           </div>

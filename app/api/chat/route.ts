@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getTodayContext, summarizeContextForAI } from "@/lib/context";
-import { resolveOpenRouter } from "@/lib/ai";
+import { summarizeContextForAI } from "@/lib/context";
+import { buildTodayView, describeUiState } from "@/lib/uiState";
+import { resolveOpenRouter, openRouterUrl } from "@/lib/ai";
 
 export const runtime = "nodejs";
 
@@ -43,6 +44,11 @@ Voice — this matters as much as the content:
   (4am-noon), Subha Dawasak (noon-5pm), Ayubowan (5pm-4am).
 - Lead with physical business reality: cash in and out, render throughput,
   what ships this week, what a decision costs and returns.
+- The block headed "WHAT IS ON THE USER'S SCREEN RIGHT NOW" is the live Today
+  dashboard. When they ask about a figure, quote it as displayed and explain
+  which calculation produced it. A value flagged MANUAL OVERRIDE was typed in
+  from chat, not derived — say so rather than defending it as a calculation.
+  You cannot change the dashboard; the floating Assistant (bottom-right) can.
 
 CONTEXT:
 `;
@@ -61,12 +67,17 @@ export async function POST(req: Request) {
     messages: { role: "user" | "assistant"; content: string }[];
   };
 
-  const ctx = await getTodayContext();
-  const contextSummary = summarizeContextForAI(ctx);
+  // The same view object the /today page renders, so the advisor can answer
+  // "why does the capacity card say 4h" with the figure that is actually on
+  // screen rather than one it recomputed with different inputs. The advisor
+  // cannot change any of it — it has no tools — but it must not contradict it.
+  const view = await buildTodayView();
+  const contextSummary = summarizeContextForAI(view.ctx);
+  const uiState = describeUiState(view);
   const model = ai.model;
 
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const res = await fetch(openRouterUrl(), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -80,7 +91,7 @@ export async function POST(req: Request) {
         model,
         max_tokens: 1024,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT_PREFIX + contextSummary },
+          { role: "system", content: `${SYSTEM_PROMPT_PREFIX}${contextSummary}\n\n${uiState}` },
           ...messages.map((m) => ({ role: m.role, content: m.content })),
         ],
       }),

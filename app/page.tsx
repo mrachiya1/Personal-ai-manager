@@ -1,16 +1,5 @@
-import { getTodayContext } from "@/lib/context";
-import {
-  getPayments,
-  getClients,
-  getIdeas,
-  getLearningTopics,
-  getFinanceGoals,
-  getIncome,
-  getSleepLogs,
-} from "@/lib/notion";
-import { computeDayEnergy, buildGreeting, focusWindows, focusHoursRemaining } from "@/lib/dayEnergy";
-import { deepWorkCapacity, metricCards, scheduleToday, visionLine } from "@/lib/dashboard";
-import { formatLocalTime, localDateISO, localHour, tzOffset } from "@/lib/timezone";
+import { buildTodayView, money } from "@/lib/uiState";
+import { formatLocalTime } from "@/lib/timezone";
 import ConnectPrompt from "@/components/ConnectPrompt";
 import DayPlanCard from "@/components/DayPlanCard";
 import LiveClock from "@/components/today/LiveClock";
@@ -21,21 +10,6 @@ import SchedulePanel from "@/components/today/SchedulePanel";
 import FinanceGoalsPanel from "@/components/today/FinanceGoalsPanel";
 import LearningPanel from "@/components/today/LearningPanel";
 import QuickAdds from "@/components/today/QuickAdds";
-import { currentUser } from "@/auth";
-
-/**
- * Compact money, shared by the metric cards and their company badges.
- *
- * "Rs" rather than "LKR" on purpose: six cards across, the four-character
- * prefix pushed the value onto a second line and broke the row's rhythm.
- * The goals panel is full-width and uses the long form.
- */
-function money(n: number, currency = "USD") {
-  const symbol = currency === "LKR" ? "Rs " : currency === "USD" ? "$" : `${currency} `;
-  if (Math.abs(n) >= 1_000_000) return `${symbol}${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 10_000) return `${symbol}${Math.round(n / 1000)}k`;
-  return `${symbol}${Math.round(n).toLocaleString()}`;
-}
 
 /**
  * What to call the whole operation, read off the workspace rather than
@@ -53,93 +27,18 @@ function groupName(names: string[]): string {
   return names[0];
 }
 
+/**
+ * The dashboard renders `buildTodayView()` and nothing else.
+ *
+ * Every derived figure — greeting, energy, capacity, cards, schedule — comes
+ * from that one function, which the Assistant's chat route also calls. That is
+ * what makes "the revenue card says $12k" a statement the model can verify
+ * rather than guess at: there is only one place the number is computed.
+ */
 export default async function TodayPage() {
-  const todayISO = localDateISO();
-  const offset = tzOffset();
-  const ctx = await getTodayContext(todayISO);
-  const now = new Date();
+  const view = await buildTodayView();
+  const { ctx, offset, now, greeting, energy, cards, schedule, overrides } = view;
 
-  const [payments, clients, ideas, learningTopics, financeGoals, income, sleepLogs] = ctx.connected
-    ? await Promise.all([
-        getPayments(),
-        getClients(),
-        getIdeas(),
-        getLearningTopics(),
-        getFinanceGoals(),
-        getIncome(),
-        getSleepLogs(3),
-      ])
-    : [[], [], [], [], [], [], []];
-
-  const energy = computeDayEnergy({ horaDay: ctx.horaDay, panchang: ctx.panchang, personalDay: ctx.personalDay });
-
-  /* ---------- capacity: the sky's ceiling and the body's ---------- */
-  const windows = focusWindows(ctx.horaDay, ctx.panchang);
-  const lastSleep = sleepLogs.find((s) => s.durationHours !== undefined);
-  const capacity = deepWorkCapacity({
-    horaHours: focusHoursRemaining(windows, now),
-    sleepHours: lastSleep?.durationHours,
-    energyLevel: ctx.recentLogs[0]?.energyLevel,
-  });
-
-  /* ---------- money ---------- */
-  const currency = income.find((i) => i.currency)?.currency || payments.find((p) => p.currency)?.currency || "USD";
-  const goalCurrency = currency === "USD" ? "USD" : currency;
-
-  const cards = metricCards({
-    companies: ctx.companies,
-    projects: ctx.projects,
-    clients,
-    tasks: ctx.tasks,
-    payments,
-    income,
-    todayISO,
-    capacity,
-    money,
-  });
-
-  /* ---------- the plan, laid onto the clock ---------- */
-  const live = ctx.projects.filter((p) => p.status !== "Delivered");
-  const dueToday = ctx.tasks.filter((t) => t.dueDate === todayISO && t.status !== "Done");
-  const shippingToday = live.filter((p) => p.deadline === todayISO);
-
-  const schedule = scheduleToday({
-    tasks: dueToday,
-    projects: ctx.projects,
-    clients,
-    companies: ctx.companies,
-    currency,
-    windows,
-    todayISO,
-    now,
-  });
-  // Project deadlines landing today aren't tasks and can't be ticked, but they
-  // would be invisible on the one day they matter most.
-  for (const p of shippingToday) {
-    if (dueToday.some((t) => t.projectId === p.id)) continue;
-    schedule.blocks.push({
-      id: `project:${p.id}`,
-      title: p.name,
-      start: ctx.panchang?.sunset ?? new Date(now.getTime() + 3600_000).toISOString(),
-      end: ctx.panchang?.sunset ?? new Date(now.getTime() + 3600_000).toISOString(),
-      done: false,
-      vision: visionLine(p, clients, ctx.companies, currency),
-      milestone: "today",
-    });
-  }
-
-  /* ---------- header ---------- */
-  const user = await currentUser();
-  const firstName = (user?.name || user?.email?.split("@")[0] || "").split(/\s+/)[0];
-  const greeting = buildGreeting({
-    hour: localHour(),
-    month: Number(todayISO.slice(5, 7)),
-    energy,
-    personalDay: ctx.personalDay,
-    sleepHours: lastSleep?.durationHours,
-    name: firstName,
-    title: "CEO",
-  });
   const dateLabel = new Date(`${ctx.dateISO}T12:00:00Z`).toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -156,7 +55,14 @@ export default async function TodayPage() {
       <header className="today-head">
         <div className="th-left">
           <div className="th-date">{dateLabel}</div>
-          <h1 className="th-greeting">{greeting.line}</h1>
+          <h1 className="th-greeting">
+            {greeting.line}
+            {view.greetingManual && (
+              <span className="manual-flag" title={overrides.greeting?.reason || "Set from chat"}>
+                set by you
+              </span>
+            )}
+          </h1>
         </div>
         <LiveClock initial={formatLocalTime(now, offset)} tzOffset={offset} />
       </header>
@@ -196,13 +102,18 @@ export default async function TodayPage() {
           )}
 
           <section className="today-split">
-            <SchedulePanel blocks={schedule.blocks} live={schedule.live} tzOffset={offset} />
-            <FinanceGoalsPanel goals={financeGoals} currency={goalCurrency} todayISO={todayISO} />
+            <SchedulePanel
+              blocks={schedule.blocks}
+              live={schedule.live}
+              tzOffset={offset}
+              manualNote={view.scheduleManual ? overrides.schedule?.reason : undefined}
+            />
+            <FinanceGoalsPanel goals={view.financeGoals} currency={view.goalCurrency} todayISO={view.todayISO} />
           </section>
 
           <section className="today-split">
-            <LearningPanel topics={learningTopics} />
-            <QuickAdds recent={ideas} />
+            <LearningPanel topics={view.learningTopics} />
+            <QuickAdds recent={view.ideas} />
           </section>
 
           <section style={{ marginBottom: 16 }}>

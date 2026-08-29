@@ -158,7 +158,7 @@ export function computeDayEnergy(input: {
   // --- reasons -------------------------------------------------------------
   const reasons: string[] = [];
   reasons.push(
-    `The Moon is in ${moon.rasi} at ${moon.nakshatra} — ${moon.mood}, which favors ${moon.favors}.`
+    `The Moon is in ${moon.rasi} at ${moon.nakshatra}, ${moon.tithi.paksha} ${moon.tithi.name} — ${moon.mood}, which favors ${moon.favors}.`
   );
   if (moon.illumination > 0.9) {
     reasons.push("Near-full Moon: high visibility and high energy, and a short fuse. Good for shipping, poor for negotiating.");
@@ -310,14 +310,17 @@ export function buildGreeting(input: {
   const base = sinhalaGreeting(input.hour);
   const { moon, currentHora, score } = input.energy;
 
-  // Poya is the full-moon day itself — worth naming on the one day a month it
-  // is true, and wrong on the other twenty-nine.
-  const poya = moon.illumination > 0.97;
+  // Poya is the full-moon day itself: the 15th tithi, not "the moon looks
+  // full". Illumination peaks at 180 degrees of elongation and stays above
+  // 99% for about a day either side, so a brightness threshold greets Poya on
+  // the day after it as readily as on the day itself — which it did, until
+  // this read the tithi instead.
+  const poya = moon.isPurnima;
   const sinhala = poya && input.hour >= 4 && input.hour < 17 ? "Subha Poya Dinayak" : base.sinhala;
 
   const parts: string[] = [seasonNote(input.month)];
   parts.push(
-    `${moon.waxing ? "waxing" : "waning"} ${moon.rasi} Moon at ${Math.round(moon.illumination * 100)}%`
+    `${moon.tithi.paksha} ${moon.tithi.name} · ${moon.waxing ? "waxing" : "waning"} ${moon.rasi} Moon at ${Math.round(moon.illumination * 100)}%`
   );
   if (currentHora) parts.push(`${currentHora.planet} hora running`);
   if (input.personalDay !== null) {
@@ -344,7 +347,7 @@ export function buildGreeting(input: {
     line: `${sinhala}${name}${title}`,
     sinhala,
     band: base.band,
-    gloss: poya ? "Full moon — Poya day" : base.gloss,
+    gloss: poya ? "Poya — full moon day" : moon.isAmavasya ? "Amavasya — new moon" : base.gloss,
     vibe: `${parted}. ${verdict}`,
   };
 }

@@ -72,6 +72,25 @@ const PAIRS = [
   ["ink-on-color", "violet", 3], ["ink-on-color", "aqua", 3],
   // The two Sleep Cycle actions are tinted buttons with matching ink.
   ["violet-ink", "violet-bg", 4.5], ["warning-ink", "warning-bg", 4.5],
+  // The "manual" / "orphaned" chips: small uppercase text on a warning tint,
+  // and the one place on the dashboard where a figure admits it isn't derived
+  // — unreadable is the same as absent.
+  ["warning-ink", "warning-bg", 4.5],
+  // Task-tree furniture, which is smaller and quieter than the table above it.
+  ["ink-muted", "surface", 3],   // rollup counts, resource dashes, add buttons
+  ["blue", "surface", 4.5],      // a task's resource link
+  ["blue-on-field", "field", 4.5], // the same link inside the expanded detail panel
+  ["ink-muted", "canvas", 3],
+  ["good-ink", "good-bg", 4.5],  // the chat's "dashboard updated" note
+  // The thumbnail cell is a button and a drop target whose only visible
+  // boundary is its border, so 1.4.11's 3:1 for UI components applies to it.
+  // The tree's connecting guideline deliberately isn't in this list: the
+  // hierarchy is carried by the indentation and the carets, and the rail is
+  // reinforcement — holding a hairline to 3:1 would turn a quiet cue into a
+  // ladder of hard lines down a screen someone reads all day.
+  ["control-edge", "field", 3],
+  ["control-edge", "surface", 3],
+  ["control-edge", "page", 3],
 ];
 
 let fails = 0;

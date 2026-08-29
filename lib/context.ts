@@ -125,8 +125,12 @@ export function summarizeContextForAI(ctx: TodayContext): string {
 
   lines.push(
     `Moon: ${ctx.moon.rasi} ${ctx.moon.degreeInRasi.toFixed(0)} degrees, nakshatra ${ctx.moon.nakshatra} ` +
-      `(lord ${ctx.moon.nakshatraLord}), ${ctx.moon.phaseName}, ${Math.round(ctx.moon.illumination * 100)}% lit, ` +
-      `${ctx.moon.waxing ? "waxing" : "waning"}. This tilts the day toward ${ctx.moon.favors}.`
+      `(lord ${ctx.moon.nakshatraLord}), tithi ${ctx.moon.tithi.number} ${ctx.moon.tithi.paksha} ${ctx.moon.tithi.name}, ` +
+      `${ctx.moon.phaseName}, ${Math.round(ctx.moon.illumination * 100)}% lit, ` +
+      `${ctx.moon.waxing ? "waxing" : "waning"}. ` +
+      `${ctx.moon.isPurnima ? "TODAY IS PURNIMA — a Poya day." : "Today is NOT a Poya day."} ` +
+      `Poya is the 15th tithi, never simply a bright moon: illumination stays near 100% for a day either side. ` +
+      `This tilts the day toward ${ctx.moon.favors}.`
   );
   if (ctx.currentHora) {
     lines.push(

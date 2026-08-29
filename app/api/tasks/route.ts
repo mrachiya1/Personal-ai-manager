@@ -15,6 +15,12 @@ export async function POST(req: Request) {
       projectId: body.projectId || undefined,
       status: body.status || "Backlog",
       dueDate: body.dueDate || undefined,
+      startDate: body.startDate || undefined,
+      priority: body.priority || undefined,
+      // Any depth. The route doesn't know or care whether this is a milestone,
+      // a sub-task or a sub-item — that's whatever the parent chain says.
+      parentTaskId: body.parentTaskId || undefined,
+      assignedTo: Array.isArray(body.assignedTo) ? body.assignedTo : undefined,
     });
     return NextResponse.json({ ok: true, id: page?.id });
   } catch (err) {

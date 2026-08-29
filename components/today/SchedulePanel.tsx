@@ -21,12 +21,16 @@ export default function SchedulePanel({
   blocks,
   live,
   tzOffset,
+  manualNote,
 }: {
   blocks: ScheduledBlock[];
   /** False once the day's favourable windows have passed — the plan is then
    *  a record of how the day was shaped rather than a plan for it. */
   live: boolean;
   tzOffset: number;
+  /** Set when these blocks were placed from chat rather than by the allocator —
+   *  the panel then has to stop claiming the times came from the horas. */
+  manualNote?: string;
 }) {
   const [rows, setRows] = useState(blocks);
   const [busy, setBusy] = useState<string | null>(null);
@@ -69,9 +73,11 @@ export default function SchedulePanel({
             Follow up today&rsquo;s plan to achieve your <b>Goals</b>
           </h2>
           <div className="section-sub">
-            {live
-              ? "Allocated into today\u2019s favourable hours, around the blocked windows"
-              : "Today\u2019s windows have passed \u2014 this is how the day was laid out"}
+            {manualNote
+              ? `Set by you in chat \u2014 ${manualNote}`
+              : live
+                ? "Allocated into today\u2019s favourable hours, around the blocked windows"
+                : "Today\u2019s windows have passed \u2014 this is how the day was laid out"}
           </div>
         </div>
         <span className="count-chip">

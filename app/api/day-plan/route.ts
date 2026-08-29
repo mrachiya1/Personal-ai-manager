@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTodayContext, summarizeContextForAI } from "@/lib/context";
-import { resolveOpenRouter } from "@/lib/ai";
+import { resolveOpenRouter, openRouterUrl } from "@/lib/ai";
 
 export const runtime = "nodejs";
 
@@ -35,7 +35,7 @@ export async function POST() {
   const model = ai.model;
 
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const res = await fetch(openRouterUrl(), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,

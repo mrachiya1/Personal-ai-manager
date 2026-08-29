@@ -2,15 +2,9 @@
 
 import type { ClientRecord, Company, Project, TeamMember } from "@/lib/types";
 import { NewProjectButton } from "@/components/ProjectForm";
-import { STATUSES } from "./ProjectTree";
 
-const statusBadge: Record<string, string> = {
-  Idea: "badge pending",
-  Planning: "badge pending",
-  Production: "badge med",
-  "Rendering-Ready": "badge high",
-  Delivered: "badge low",
-};
+
+import { statusBadge } from "./ProjectTree";
 
 /** Days from today to an ISO date. Negative = in the past. */
 function daysUntil(iso: string | undefined, todayISO: string): number | null {
@@ -34,6 +28,7 @@ export default function BoardView({
   team,
   taskStats,
   todayISO,
+  statuses,
   onStatus,
 }: {
   rows: Project[];
@@ -42,9 +37,11 @@ export default function BoardView({
   team: TeamMember[];
   taskStats: Map<string, { total: number; done: number }>;
   todayISO: string;
+  /** The workspace's own status vocabulary, read off the Notion schema. */
+  statuses: string[];
   onStatus: (p: Project, status: string) => void;
 }) {
-  const present = STATUSES.filter((s) => rows.some((p) => p.status === s));
+  const present = statuses.filter((s) => rows.some((p) => p.status === s));
   return (
     <div className="board-scroll">
       {present.map((status) => {
@@ -53,7 +50,7 @@ export default function BoardView({
           <div className="board-col" key={status}>
             <div className="board-col-head">
               <div className="left">
-                <span className={statusBadge[status] ?? "badge pending"}>{status}</span>
+                <span className={statusBadge(status)}>{status}</span>
                 <span className="count">{list.length}</span>
               </div>
               <NewProjectButton companies={companies} clients={clients} team={team} defaultStatus={status} compact label={`New in ${status}`} />
@@ -88,7 +85,7 @@ export default function BoardView({
                           fontFamily: "inherit",
                         }}
                       >
-                        {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
                   </div>

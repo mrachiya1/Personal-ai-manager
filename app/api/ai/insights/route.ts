@@ -10,7 +10,7 @@ import {
   notionConnected,
 } from "@/lib/notion";
 import { localDateISO, localMonthISO } from "@/lib/timezone";
-import { resolveOpenRouter } from "@/lib/ai";
+import { resolveOpenRouter, openRouterUrl } from "@/lib/ai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -127,7 +127,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const res = await fetch(openRouterUrl(), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${ai.apiKey}`,

@@ -32,7 +32,19 @@ function GitHubMark() {
   );
 }
 
-const MARKS: Record<string, React.ReactNode> = { google: <GoogleMark />, github: <GitHubMark /> };
+function AppleMark() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M16.4 12.8c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.8-3.5.8s-1.8-.8-3-.8c-1.5 0-2.9.9-3.7 2.3-1.6 2.7-.4 6.8 1.1 9 .8 1.1 1.7 2.3 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2-1.1 2.8-2.2.9-1.3 1.2-2.5 1.3-2.6-.1 0-2.5-1-2.5-3.5ZM14.2 5.9c.6-.8 1.1-1.9 1-3-.9 0-2.1.6-2.8 1.4-.6.7-1.2 1.8-1 2.9 1 .1 2.1-.5 2.8-1.3Z" />
+    </svg>
+  );
+}
+
+const MARKS: Record<string, React.ReactNode> = {
+  google: <GoogleMark />,
+  github: <GitHubMark />,
+  apple: <AppleMark />,
+};
 
 export default async function LoginPage({
   searchParams,
@@ -52,61 +64,22 @@ export default async function LoginPage({
         : null;
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-        background: "var(--field)",
-      }}
-    >
-      <div style={{ width: "100%", maxWidth: 386 }}>
-        <div
-          className="card"
-          style={{
-            background: "var(--surface-raised)",
-            borderRadius: 18,
-            padding: "32px 30px 26px 30px",
-            boxShadow: "var(--shadow-2)",
-          }}
-        >
-          <div
-            className="ws-mark brand-serif"
-            style={{ width: 40, height: 40, borderRadius: 11, fontSize: 18, marginBottom: 18 }}
-          >
-            O
-          </div>
+    <div className="auth-shell">
+      <div className="auth-card-wrap">
+        <div className="card auth-card">
+          <div className="ws-mark brand-serif auth-mark">O</div>
 
           {!PASSWORD_LOGIN_ENABLED && (
             <>
-              <h1 style={{ margin: 0, fontSize: 24, fontWeight: 600, letterSpacing: "-0.025em" }}>
-                Sign in to Orex OS
-              </h1>
-              <p style={{ margin: "8px 0 22px 0", fontSize: 13, lineHeight: 1.6, color: "var(--ink-muted)" }}>
-                Projects, finances and AI slip scanning. Every account connects its own Notion workspace — your data
-                stays in your Notion, not here.
+              <h1 className="auth-title">Sign in to Orex OS</h1>
+              <p className="auth-sub">
+                Every account connects its own Notion workspace — your projects, finances and notes stay in your
+                Notion, never in a shared database here.
               </p>
             </>
           )}
 
-          {errorMessage && (
-            <div
-              style={{
-                fontSize: 12.5,
-                lineHeight: 1.55,
-                color: "var(--critical-ink)",
-                background: "var(--critical-bg)",
-                border: "1px solid rgba(208,59,59,0.25)",
-                borderRadius: 9,
-                padding: "10px 12px",
-                marginBottom: 16,
-              }}
-            >
-              {errorMessage}
-            </div>
-          )}
+          {errorMessage && <div className="auth-error">{errorMessage}</div>}
 
           {PASSWORD_LOGIN_ENABLED && (
             <LoginForm
@@ -117,14 +90,14 @@ export default async function LoginPage({
           )}
 
           {PASSWORD_LOGIN_ENABLED && AVAILABLE_PROVIDERS.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 14px 0" }}>
-              <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
-              <span style={{ fontSize: 11, color: "var(--ink-muted)" }}>or</span>
-              <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
+            <div className="auth-or">
+              <span />
+              <em>or</em>
+              <span />
             </div>
           )}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+          <div className="auth-providers">
             {AVAILABLE_PROVIDERS.map((p) => (
               <form
                 key={p.id}
@@ -133,11 +106,7 @@ export default async function LoginPage({
                   await signIn(p.id, { redirectTo: callbackUrl || "/" });
                 }}
               >
-                <button
-                  type="submit"
-                  className="btn-ghost"
-                  style={{ width: "100%", justifyContent: "center", padding: "11px 14px", fontSize: 13.5, borderRadius: 10 }}
-                >
+                <button type="submit" className="btn-ghost auth-provider">
                   {MARKS[p.id]}
                   Continue with {p.name}
                 </button>
@@ -145,24 +114,14 @@ export default async function LoginPage({
             ))}
           </div>
 
-          <div
-            style={{
-              marginTop: 20,
-              paddingTop: 15,
-              borderTop: "1px solid var(--border)",
-              fontSize: 11.5,
-              lineHeight: 1.6,
-              color: "var(--ink-muted)",
-            }}
-          >
-            After signing in, open <strong style={{ color: "var(--ink-secondary)" }}>Settings → Notion</strong> to
-            connect your workspace. Nothing is read from Notion until you do.
+          <div className="auth-foot">
+            <strong>Your workspace is yours.</strong> After signing in, connect your own Notion integration token and
+            database IDs under <strong>Settings → Notion</strong>. Every query is scoped to the signed-in account, so
+            no other account can read your databases — and nothing is read from Notion until you connect it.
           </div>
         </div>
 
-        <div style={{ textAlign: "center", fontSize: 11, color: "var(--ink-muted)", marginTop: 16 }}>
-          Orex OS · Personal &amp; Company Intelligence
-        </div>
+        <div className="auth-tagline">Orex OS · Personal &amp; Company Intelligence</div>
       </div>
     </div>
   );

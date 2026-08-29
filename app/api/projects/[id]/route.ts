@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { updateProject } from "@/lib/notion";
+import { archiveProject, updateProject } from "@/lib/notion";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -9,5 +9,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Failed to update project" }, { status: 502 });
+  }
+}
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  try {
+    const { tasksArchived } = await archiveProject(id);
+    return NextResponse.json({ ok: true, tasksArchived });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Couldn't delete that project" },
+      { status: 502 }
+    );
   }
 }
