@@ -410,6 +410,65 @@ check("and carry their own field labels",
     getComputedStyle(el, "::before").content
   )).toLowerCase().includes("status"));
 
+/* ------------------------------------------------------------------ */
+console.log("\n--- 14. DROPDOWNS ARE REACHABLE ANYWHERE ON THE PAGE ---");
+/* ------------------------------------------------------------------ */
+// The reported bug: a status dropdown on the last row of the last section
+// opened into an ancestor with overflow:hidden. The panel rendered and was
+// clipped, so the options could not be clicked. This opens the very last one
+// on the page and picks from it.
+await p.setViewportSize({ width: 1440, height: 900 });
+await p.goto(BASE + "/projects", { waitUntil: "networkidle" });
+await p.waitForTimeout(500);
+
+const lastStatus = p.locator('tr.pt-row td[data-label="Status"] .ed-cell').last();
+await lastStatus.scrollIntoViewIfNeeded();
+const wasStatus = (await lastStatus.innerText()).trim();
+await lastStatus.click();
+await p.waitForTimeout(350);
+
+const pop = p.locator(".ed-pop").first();
+check("the panel opens", (await pop.count()) === 1);
+check("it is a child of <body>, not of the cell",
+  (await pop.evaluate((el) => el.parentElement?.tagName)) === "BODY");
+
+const box = await pop.boundingBox();
+const vp = p.viewportSize();
+check("it is fully inside the viewport",
+  box !== null && box.y >= 0 && box.x >= 0 && box.y + box.height <= vp.height + 1 && box.x + box.width <= vp.width + 1,
+  box ? `${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.width)}x${Math.round(box.height)} in ${vp.width}x${vp.height}` : "no box");
+check("no ancestor clips it", await pop.evaluate((el) => {
+  let n = el.parentElement;
+  while (n && n !== document.body) {
+    const o = getComputedStyle(n).overflow;
+    if (o.includes("hidden") || o.includes("clip")) return false;
+    n = n.parentElement;
+  }
+  return true;
+}));
+
+const opts = pop.locator(".ed-opt");
+check("its options are there", (await opts.count()) > 1, String(await opts.count()));
+// The real test: click one and see the value change.
+const pick = opts.filter({ hasText: /Delivered|Production|Planning|Idea/ }).first();
+const wanted = (await pick.innerText()).trim();
+await pick.click();
+await p.waitForTimeout(1400);
+const nowStatus = (await lastStatus.innerText()).trim();
+check(`picking "${wanted}" actually changes the cell`, nowStatus.startsWith(wanted), `${wasStatus} -> ${nowStatus}`);
+check("a PATCH went out", sent.some((s2) => s2.includes("/api/projects/") && s2.includes(wanted)),
+  sent.filter((s2) => s2.includes("/api/projects/")).slice(-1)[0] || "(none)");
+
+// And the same for a section card, which is what actually had the clip.
+check("no projects section clips its children",
+  await p.$$eval(".pt-section", (els) => els.every((el) => !getComputedStyle(el).overflow.includes("hidden"))));
+
+/* ---- an empty cell reads as empty, not as a repeated column label ---- */
+const placeholders = await p.$$eval("tr.pt-row .ed-cell.empty", (els) => els.map((el) => el.textContent.trim()));
+check("empty cells show an em dash, not the column's name",
+  !placeholders.some((t) => /^(Start|Deadline|Tag|Assign)/.test(t)),
+  [...new Set(placeholders)].join(" | "));
+
 console.log(`\nerrors: ${errs.length ? errs.join(" | ") : "none"}`);
 console.log(`\n=== ${pass}/${pass + fail} checks passed ===`);
 await b.close();

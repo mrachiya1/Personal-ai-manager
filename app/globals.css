@@ -1879,7 +1879,11 @@ html[data-theme="dark"]{
 
 /* ---------- sections ---------- */
 .pt-sections{ display:grid; gap:14px; margin-bottom:16px; }
-.card.pt-section{ padding:0; overflow:hidden; }
+/* No overflow:hidden. It clipped every dropdown that opened near a section's
+   lower edge — the panel rendered, it was simply cut off, so the options
+   could not be clicked. The popover is portalled now, so this is belt as
+   well as braces. */
+.card.pt-section{ padding:0; }
 /* The personal section used to be a dashed-border card. With the cards gone
    there is nothing to dash — the eyebrow above the title already says which
    kind of work it is. */
@@ -2228,7 +2232,12 @@ html[data-theme="dark"]{
 .ed-cell.is-picker{ cursor:pointer; }
 .ed-cell.num{ justify-content:flex-end; font-variant-numeric:tabular-nums; }
 .ed-cell:hover{ background:var(--field); }
-.ed-cell:focus{ outline:none; background:var(--field); box-shadow:0 0 0 2px var(--blue) inset; }
+/* A hairline, not a 2px inset slab. The old ring drew a hard box around the
+   value — on a status pill it read as a second, competing container. */
+.ed-cell:focus{ outline:none; background:var(--field); box-shadow:0 0 0 1px var(--border-strong) inset; }
+.ed-cell:focus-visible{ box-shadow:0 0 0 1.5px var(--blue) inset; }
+/* While its popover is open the cell is quiet — the panel is the focus. */
+.ed-cell.is-open{ background:var(--field); box-shadow:none; }
 .ed-cell.empty{ color:var(--ink-muted); }
 .ed-cell.tone-late{ color:var(--critical-ink); font-weight:600; }
 .ed-cell.tone-soon{ color:var(--warning-ink); font-weight:600; }
@@ -2246,8 +2255,9 @@ html[data-theme="dark"]{
 .ed-input.num{ text-align:right; font-variant-numeric:tabular-nums; }
 
 .ed-pop-backdrop{ position:fixed; inset:0; z-index:60; }
+.ed-pop-anchor{ position:absolute; width:0; height:0; }
 .ed-pop{
-  position:absolute; top:calc(100% + 5px); left:0; z-index:61;
+  position:fixed; z-index:61;
   min-width:190px; max-width:280px; max-height:280px; overflow-y:auto;
   padding:5px; border-radius:11px;
   background:var(--surface-raised); border:1px solid var(--border-strong);
@@ -2532,7 +2542,7 @@ html[data-theme="dark"] .btn-danger:hover:not(:disabled){ filter:brightness(1.1)
 .ap-btn svg{ width:12px; height:12px; }
 .ap-btn:hover{ color:var(--ink); border-color:var(--ink-muted); background:var(--field); }
 .ap-btn:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
-.ap-wrap .ed-pop{ left:auto; right:0; min-width:250px; }
+.ap-wrap .ed-pop{ min-width:250px; }
 
 .ap-type{
   display:flex; align-items:center; gap:10px; width:100%; min-height:40px;

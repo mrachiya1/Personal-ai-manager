@@ -313,12 +313,15 @@ function ProjectRowView({
           </div>
         </td>
 
+        {/* An empty cell shows an em dash, not the column's own name. "Start"
+            sitting under the Start header reads as a label repeated, and a
+            row of those reads as a form nobody has filled in. */}
         {/* 1 — start */}
         <td data-label="Start">
           <DateCell
             value={p.startDate}
             format={shortDate}
-            placeholder="Start"
+            placeholder="—"
             onSave={(startDate) => handlers.patch(p.id, { startDate }, { startDate })}
             nav={nav(1)}
           />
@@ -329,7 +332,7 @@ function ProjectRowView({
           <DateCell
             value={p.deadline}
             format={shortDate}
-            placeholder="Deadline"
+            placeholder="—"
             tone={row.urgency}
             onSave={(deadline) => handlers.patch(p.id, { deadline }, { deadline })}
             nav={nav(2)}
@@ -347,7 +350,7 @@ function ProjectRowView({
             selected={p.category}
             options={categoryOptions}
             heading="Category"
-            placeholder="Tag"
+            placeholder="—"
             onSave={(category) => handlers.patch(p.id, { category }, { category })}
             renderClosed={(chosen) => (
               <span className="pt-cats">
@@ -366,7 +369,7 @@ function ProjectRowView({
             options={teamOptions}
             heading="Assign to"
             searchable
-            placeholder="Assign"
+            placeholder="—"
             onSave={(assignedTo) => handlers.patch(p.id, { assignedTo }, { assignedTo })}
             renderClosed={(chosen) => <AssignedDots people={chosen} />}
             nav={nav(5)}

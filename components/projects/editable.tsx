@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 /* ==================================================================
    Notion-style inline editing.
@@ -324,20 +325,89 @@ export function NumberCell({
 /* ------------------------------------------------------------------ */
 
 export function Popover({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+  /*
+    Rendered into the document body, positioned fixed, and flipped when there
+    is no room below.
+
+    It used to be absolutely positioned inside the cell, which meant any
+    ancestor with `overflow:hidden` clipped it — and the Projects section card
+    had exactly that. A status dropdown on the last row of a section opened
+    into nothing: the panel was there, it was just cut off, so the options
+    could not be clicked. Every such ancestor is a latent version of that bug,
+    so the panel now escapes all of them.
+
+    The zero-size anchor stays behind in the original position; its parent's
+    rect is what the panel is placed against.
+  */
+  const anchor = useRef<HTMLSpanElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; above: boolean } | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  const place = useCallback(() => {
+    const host = anchor.current?.parentElement;
+    if (!host) return;
+    const r = host.getBoundingClientRect();
+    const h = panel.current?.offsetHeight ?? 240;
+    const gap = 5;
+    const roomBelow = window.innerHeight - r.bottom;
+    // Flip up only when below genuinely doesn't fit AND above does — a panel
+    // that flips into an even smaller space is not an improvement.
+    const above = roomBelow < h + gap + 8 && r.top > roomBelow;
+    const width = Math.max(r.width, 190);
+    let left = r.left;
+    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+    setPos({
+      top: above ? Math.max(8, r.top - h - gap) : r.bottom + gap,
+      left: Math.max(8, left),
+      width,
+      above,
+    });
+  }, []);
+
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    place();
+    // A second pass once the panel has real height, so a flip is decided on
+    // the measurement rather than on the 240px guess.
+    const id = requestAnimationFrame(place);
+    return () => cancelAnimationFrame(id);
+  }, [place]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    // Scrolling moves the cell; the panel follows rather than detaching.
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [onClose, place]);
+
+  const body = (
+    <>
+      <div className="ed-pop-backdrop" onClick={onClose} />
+      <div
+        ref={panel}
+        className={`ed-pop${pos?.above ? " above" : ""}`}
+        style={pos ? { top: pos.top, left: pos.left, minWidth: pos.width } : { opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </>
+  );
 
   return (
     <>
-      {/* A full-screen backdrop rather than a document click listener: it
-          closes on any outside click without racing the opening click. */}
-      <div className="ed-pop-backdrop" onClick={onClose} />
-      <div className="ed-pop" onClick={(e) => e.stopPropagation()}>
-        {children}
-      </div>
+      <span ref={anchor} className="ed-pop-anchor" aria-hidden />
+      {mounted && createPortal(body, document.body)}
     </>
   );
 }
@@ -379,7 +449,7 @@ export function DateCell({
   return (
     <div style={{ position: "relative" }}>
       <div
-        className={`ed-cell is-picker${value ? "" : " empty"}${tone ? ` tone-${tone}` : ""}`}
+        className={`ed-cell is-picker${value ? "" : " empty"}${tone ? ` tone-${tone}` : ""}${isOpen ? " is-open" : ""}`}
         onClick={() => setOpen(true)}
         onKeyDown={(e) => {
           if (handleArrows(e)) return;
@@ -447,7 +517,7 @@ export function SelectCell({
   return (
     <div style={{ position: "relative" }}>
       <div
-        className={`ed-cell is-picker${value ? "" : " empty"}`}
+        className={`ed-cell is-picker${value ? "" : " empty"}${isOpen ? " is-open" : ""}`}
         onClick={() => setOpen(true)}
         onKeyDown={(e) => {
           if (handleArrows(e)) return;
@@ -532,7 +602,7 @@ export function MultiPickCell({
   return (
     <div style={{ position: "relative" }}>
       <div
-        className={`ed-cell is-picker${chosen.length ? "" : " empty"}`}
+        className={`ed-cell is-picker${chosen.length ? "" : " empty"}${isOpen ? " is-open" : ""}`}
         onClick={() => setOpen(true)}
         onKeyDown={(e) => {
           if (handleArrows(e)) return;
