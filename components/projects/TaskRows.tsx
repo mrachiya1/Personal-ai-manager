@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Task } from "@/lib/types";
 import type { TaskNode, TaskTree as Tree } from "@/lib/taskTree";
 import { DateCell, MultiPickCell, Popover, SelectCell, TextCell, type PickOption } from "@/components/projects/editable";
@@ -24,7 +24,24 @@ import Thumbnail from "@/components/projects/Thumbnail";
    ================================================================== */
 
 export const TASK_STATUSES = ["Backlog", "In Progress", "Blocked", "Done"];
+
 export const TASK_PRIORITIES = ["Urgent", "High", "Normal", "Low"];
+
+/**
+ * How far a row is pushed in, per level.
+ *
+ * A flat 20px per level is fine to three deep and ruinous at six: 120px out of
+ * a name column that is about 300px wide leaves no room for the title, and the
+ * breakdown a person actually wants ("phone pop -> 3D model -> materials ->
+ * turntable -> denoise") is exactly where it collapses. The first three levels
+ * keep the full step because that is where the shape is read; after that each
+ * level costs 10px, which is still unambiguous against a branch line but stops
+ * the column eating itself. Six levels is 84px, not 120px.
+ */
+export function indentFor(depth: number): number {
+  return Math.min(depth, 3) * 20 + Math.max(0, depth - 3) * 10;
+}
+
 
 export interface TaskRowHandlers {
   patchTask: (task: Task, changes: Partial<Task>, body: Record<string, unknown>) => void;
@@ -86,8 +103,8 @@ function AddTaskRow({
   depth,
   columns,
   onAdd,
-  hint,
-  onHintTaken,
+  open,
+  setOpen,
 }: {
   projectId: string;
   parentTaskId?: string;
@@ -95,10 +112,18 @@ function AddTaskRow({
   /** Total cells in a row, so the trailing filler spans correctly. */
   columns: number;
   onAdd: TaskRowHandlers["addTask"];
-  hint: TaskRowHandlers["addUnder"];
-  onHintTaken: () => void;
+  /**
+   * Open state lives in TaskRows, not here.
+   *
+   * It has to: "Add sub-task" on a task with no children yet must be able to
+   * bring this row into existence, and a row that owns its own open flag
+   * cannot be opened by something that hasn't mounted it. That was the bug —
+   * the menu item set a hint, and the only component that read the hint was
+   * one that never rendered for a childless task.
+   */
+  open: boolean;
+  setOpen: (v: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -108,15 +133,7 @@ function AddTaskRow({
   const [error, setError] = useState<string | null>(null);
 
   const word = depth === 0 ? "Add task" : "Add sub-task";
-  const asked =
-    hint && hint.projectId === projectId && (hint.parentTaskId ?? undefined) === (parentTaskId ?? undefined);
-  useEffect(() => {
-    if (asked) {
-      setOpen(true);
-      onHintTaken();
-    }
-  }, [asked, onHintTaken]);
-  const indent = { ["--pt-indent" as string]: `${depth * 20}px` };
+  const indent = { ["--pt-indent" as string]: `${indentFor(depth)}px` };
 
   async function submit() {
     if (!title.trim() || saving) return;
@@ -283,6 +300,9 @@ function TaskRow({
   handlers,
   baseRow,
   index,
+  adders,
+  setAdder,
+  onExpand,
 }: {
   node: TaskNode;
   projectId: string;
@@ -293,10 +313,26 @@ function TaskRow({
   handlers: TaskRowHandlers;
   baseRow: number;
   index: number;
+  adders: Set<string>;
+  setAdder: (key: string, open: boolean) => void;
+  /** Opens a branch without closing it if it is already open — the toggle
+   *  would hide the sub-task the person is about to add. */
+  onExpand: (id: string) => void;
 }) {
   const { task } = node;
   const hasKids = node.children.length > 0;
   const isOpen = expanded.has(task.id);
+  /**
+   * The add row appears under exactly the branch the person asked for it in.
+   *
+   * It used to render, permanently, at the foot of every expanded branch. Six
+   * levels deep that is six stacked "+ Add sub-task" buttons in a column,
+   * differing only by a 10–20px indent — nobody can tell which one adds to
+   * which parent, and the breakdown they were reading is buried under its own
+   * chrome. The + on each row is the affordance now; it sits against the task
+   * it acts on, which is unambiguous, and it is one click rather than two.
+   */
+  const adderOpen = adders.has(task.id);
   const done = task.status === "Done";
   const col = 100 + index * 3;
 
@@ -308,7 +344,7 @@ function TaskRow({
         // One custom property, read by both the desktop indent and the branch
         // elbow, and by the phone layout's left margin — so the two can't drift
         // out of step the way two hardcoded numbers would.
-        style={{ ["--pt-indent" as string]: `${node.depth * 20}px` }}
+        style={{ ["--pt-indent" as string]: `${indentFor(node.depth)}px` }}
       >
         {/*
           Project name column — the only cell that knows about depth.
@@ -355,7 +391,17 @@ function TaskRow({
             </svg>
           </button>
 
-          <Thumbnail pageId={task.id} name={task.title} src={handlers.thumbs[task.id] || task.thumbnail?.url} category="task" size={32} />
+          {/* Smaller the deeper it sits. A 32px thumb is worth its space on a
+              milestone; five levels down it is competing with the title for a
+              column that the indent has already taken a bite out of, and the
+              title is what the person is scanning for. */}
+          <Thumbnail
+            pageId={task.id}
+            name={task.title}
+            src={handlers.thumbs[task.id] || task.thumbnail?.url}
+            category="task"
+            size={node.depth >= 2 ? 24 : 32}
+          />
 
           <span className="pt-sub-title">
             <TextCell
@@ -381,7 +427,7 @@ function TaskRow({
           </div>
         </td>
 
-        <td data-label="Start">
+        <td data-label="Start" data-empty={!task.startDate}>
           <DateCell
             value={task.startDate}
             format={shortDate}
@@ -390,7 +436,7 @@ function TaskRow({
             nav={{ row: baseRow, col: col + 1 }}
           />
         </td>
-        <td data-label="Deadline">
+        <td data-label="Deadline" data-empty={!task.dueDate}>
           <DateCell
             value={task.dueDate}
             format={shortDate}
@@ -403,11 +449,15 @@ function TaskRow({
         {/* Category belongs to the project, not the task. Repeating the
             parent's value down every sub-row reads as data the task carries —
             it doesn't, and a blank says so. */}
-        <td data-label="Category">
+        {/* data-empty is read only by the phone layout, where a cell with no
+            value costs a whole line of a card. It stays tappable there — it
+            just collapses onto one line instead of two, so a card of mostly
+            blanks doesn't push the next sub-task off the screen. */}
+        <td data-label="Category" data-empty={!task.tags?.length}>
           {task.tags && task.tags.length ? <span className="tag">{task.tags[0]}</span> : <span className="pt-inherit">—</span>}
         </td>
 
-        <td data-label="Assigned">
+        <td data-label="Assigned" data-empty={!task.assignedTo?.length}>
           <MultiPickCell
             selected={task.assignedTo}
             options={teamOptions}
@@ -470,6 +520,20 @@ function TaskRow({
           ) : (
             <span className="pt-inherit">—</span>
           )}
+          <button
+            className="pt-add-btn"
+            type="button"
+            onClick={() => {
+              onExpand(task.id);
+              setAdder(task.id, true);
+            }}
+            aria-label={`Add a sub-task under ${task.title}`}
+            title="Add a sub-task"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
           <TaskMenu node={node} handlers={handlers} projectId={projectId} />
           </div>
         </td>
@@ -488,18 +552,21 @@ function TaskRow({
             handlers={handlers}
             baseRow={baseRow}
             index={index + i + 1}
+            adders={adders}
+            setAdder={setAdder}
+            onExpand={onExpand}
           />
         ))}
 
-      {isOpen && hasKids && (
+      {adderOpen && (
         <AddTaskRow
           projectId={projectId}
           parentTaskId={task.id}
           depth={node.depth + 1}
           columns={columns}
           onAdd={handlers.addTask}
-          hint={handlers.addUnder}
-          onHintTaken={handlers.clearAdd}
+          open={adderOpen}
+          setOpen={(v) => setAdder(task.id, v)}
         />
       )}
     </>
@@ -538,6 +605,23 @@ export default function TaskRows({
   // opening nothing hides that there is anything underneath at all.
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(tree.roots.map((n) => n.task.id)));
 
+  /**
+   * Which add rows are open, keyed by the id of the task they add under
+   * (`""` for the project's own top level).
+   *
+   * This lives here rather than in each AddTaskRow because "Add sub-task" on a
+   * leaf has to summon a row that does not exist yet. A row cannot open
+   * itself into existence.
+   */
+  const [adders, setAdders] = useState<Set<string>>(() => new Set());
+  const setAdder = useCallback((key: string, open: boolean) => {
+    setAdders((prev) => {
+      const next = new Set(prev);
+      open ? next.add(key) : next.delete(key);
+      return next;
+    });
+  }, []);
+
   const toggle = (id: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -545,13 +629,35 @@ export default function TaskRows({
       return next;
     });
 
+  const expand = useCallback(
+    (id: string) => setExpanded((prev) => (prev.has(id) ? prev : new Set(prev).add(id))),
+    []
+  );
+
+  /**
+   * The ··· menu asks for an add row; this is where the ask lands.
+   *
+   * Opening the branch matters as much as opening the row: a task that already
+   * has three sub-items and is collapsed would otherwise sprout an input with
+   * its existing siblings still hidden, which reads as though the new item
+   * went somewhere else.
+   */
+  const ask = handlers.addUnder;
+  const askKey = ask && ask.projectId === projectId ? ask.parentTaskId ?? "" : null;
+  useEffect(() => {
+    if (askKey === null) return;
+    setAdder(askKey, true);
+    if (askKey) expand(askKey);
+    handlers.clearAdd();
+  }, [askKey, setAdder, expand, handlers]);
+
   return (
     <>
       {tree.roots.length === 0 && (
         <tr className="pt-sub empty">
           <td colSpan={columns} className="pt-sub-empty">
-            Nothing broken down yet. Add the first task below — sub-tasks nest under it as deep as the work goes, and
-            the progress line fills from the deepest items up.
+            Nothing broken down yet. Add the first task below, then use the + on its row to split it — sub-tasks nest
+            as deep as the work goes, and the progress line fills from the deepest items up.
           </td>
         </tr>
       )}
@@ -568,6 +674,9 @@ export default function TaskRows({
           handlers={handlers}
           baseRow={baseRow}
           index={i * 40}
+          adders={adders}
+          setAdder={setAdder}
+          onExpand={expand}
         />
       ))}
 
@@ -576,8 +685,8 @@ export default function TaskRows({
         depth={0}
         columns={columns}
         onAdd={handlers.addTask}
-        hint={handlers.addUnder}
-        onHintTaken={handlers.clearAdd}
+        open={adders.has("")}
+        setOpen={(v) => setAdder("", v)}
       />
     </>
   );

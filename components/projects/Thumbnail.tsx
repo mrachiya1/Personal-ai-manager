@@ -127,7 +127,8 @@ export default function Thumbnail({
   /** Current preview, if any: the stored data URL or a Notion file URL. */
   src?: string;
   category?: ThumbCategory;
-  size?: 32 | 40;
+  /** 24 is the deep-nesting size — see the call site in TaskRows. */
+  size?: 24 | 32 | 40;
   /** Called with the new thumb data URL, or null when cleared. */
   onChange?: (thumb: string | null) => void;
 }) {

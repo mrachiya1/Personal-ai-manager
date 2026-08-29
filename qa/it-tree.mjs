@@ -296,19 +296,28 @@ await expandProject("Brand Relaunch Film");
 await openNode("Shot 01 Animation");
 await openNode("Lighting & Shading");
 
-const adders = p.locator("tr.pt-addrow");
-check("every level offers its own add row", (await adders.count()) >= 3, String(await adders.count()));
-const deep = p.locator('tr.pt-addrow[data-parent="tk3c"]').first();
-check("the deepest one is nested under Lighting & Shading", (await deep.count()) === 1);
-check("and says 'Add sub-task'", (await deep.locator(".pt-add-open").innerText()).trim() === "Add sub-task");
-check("the top-level one says 'Add task'",
+// Each project keeps ONE standing add row, at its foot. The version of this
+// that put a permanent "+ Add sub-task" under every expanded branch produced
+// six near-identical buttons in a column six levels down, with nothing to say
+// which one added where. The + on each row replaced it: it sits against the
+// task it acts on, and it is one click instead of two.
+check("the project keeps one standing add row, at its foot",
+  (await p.locator('tr.pt-addrow[data-parent=""]').count()) >= 1);
+check("and it says 'Add task'",
   (await p.locator('tr.pt-addrow[data-parent=""]').first().locator(".pt-add-open").innerText()).trim() === "Add task");
+check("no wall of add rows under the open branches",
+  (await p.locator("tr.pt-addrow:not(.open)").count()) <= (await p.locator("tr.pt-row").count()),
+  `${await p.locator("tr.pt-addrow:not(.open)").count()} add rows`);
+
+await subRow("Lighting & Shading").hover();
+await subRow("Lighting & Shading").locator(".pt-add-btn").first().click();
+await p.waitForTimeout(300);
+const deep = p.locator('tr.pt-addrow[data-parent="tk3c"]').first();
+check("the + opens an add row nested under Lighting & Shading", (await deep.count()) === 1);
 check("it is a row of the table, not a floating form",
   (await deep.evaluate((el) => el.tagName)) === "TR" &&
     (await deep.evaluate((el) => [...el.children].reduce((n, td) => n + (td.colSpan || 1), 0))) === headerCells);
 
-await deep.locator(".pt-add-open").click();
-await p.waitForTimeout(250);
 const openAdder = p.locator('tr.pt-addrow.open[data-parent="tk3c"]').first();
 // The name input must land in the Project column, not in a form below.
 const nameCentre = await centre(openAdder.locator("td.pt-addrow-name"));
@@ -403,8 +412,14 @@ await p.waitForTimeout(500);
 const phoneOverflow = await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 check("no sideways scroll on a phone", phoneOverflow <= 1, `${phoneOverflow}px`);
 await expandProject("Studio Reel 2026");
+// A card on the same two-column grid the project card above it uses. It was
+// `display:block` with the cells as inline-blocks, which reflowed into a
+// ragged run of label/value pairs — it read as a table that had come apart.
 check("sub-tasks still render as labelled cards",
-  (await p.locator("tr.pt-sub").first().evaluate((el) => getComputedStyle(el).display)) === "block");
+  (await p.locator("tr.pt-sub").first().evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return cs.display === "grid" && cs.gridTemplateColumns.split(" ").length === 2;
+  })));
 check("and carry their own field labels",
   (await p.locator('tr.pt-sub td[data-label="Status"]').first().evaluate((el) =>
     getComputedStyle(el, "::before").content
