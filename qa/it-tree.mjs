@@ -73,52 +73,46 @@ await expandProject("Brand Relaunch Film");
 const pageOverflow = await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 check("the page itself does not scroll sideways", pageOverflow <= 0, `${pageOverflow}px`);
 
-// The rule this screen is held to: the thirteen designed columns fit a laptop
-// and never scroll. Custom Notion properties are additive and unbounded, so
-// they — and only they — put the table past its frame.
-// Measured at 1600 — the width class this layout is drawn for. Thirteen
-// columns of real content (a 10-character date, a status word, a money
-// figure) need about 1230px; below that something has to give, and a
-// contained scroll inside the card is the honest choice over truncating
-// every cell to "Lu…". What must never happen at any width is a page-level
-// scrollbar, and that is checked at 1440 above and at 390 at the end.
-await p.setViewportSize({ width: 1600, height: 1000 });
-await p.waitForTimeout(400);
-const fits = await p.evaluate(() => {
-  const t = document.querySelector("table.pt-table");
-  const cols = [...t.querySelectorAll("colgroup col")];
-  const designed = cols.slice(0, 13).reduce((n, c) => n + c.getBoundingClientRect().width, 0);
-  return { designed, frame: t.closest(".pt-scroll").clientWidth };
-});
-check("the designed thirteen columns fit a 1600 viewport", fits.designed <= fits.frame + 1,
-  `${Math.round(fits.designed)}px in ${fits.frame}px`);
-await p.setViewportSize({ width: 1440, height: 1000 });
-await p.waitForTimeout(400);
-
-const customCols = await p.$eval("table.pt-table thead tr", (tr) =>
-  [...tr.children].map((th) => th.textContent.trim()).filter((t) =>
-    !["Project","Start","Deadline","Client","Purpose","Category","Assigned","Status","Updated","Next task","Priority","Files","Budget","Payment","Billing",""].includes(t)
-  ).length
-);
-const scrollers = await p.$$eval(".pt-scroll", (els) =>
-  els.map((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }))
-);
-check(
-  customCols === 0 ? "no table is wider than its frame" : `overflow comes only from the ${customCols} custom columns`,
-  customCols === 0
-    ? scrollers.every((s) => s.scroll <= s.client + 1)
-    : scrollers.every((s) => s.scroll - s.client <= customCols * 200),
-  scrollers.map((s) => `${s.scroll}/${s.client}`).join(" ")
-);
-check(
-  "the designed column set carries no min-width of its own",
-  await p.evaluate(() =>
-    [...document.querySelectorAll("table.pt-table")].every((t) => {
-      const custom = [...t.querySelectorAll("thead th")].length > 13;
-      return custom || !t.style.minWidth;
+// The rule now: the table is exactly as wide as its frame, always. Every
+// column is a share of 100% under a fixed layout and the wrapper has no
+// overflow-x at all, so a horizontal scrollbar cannot appear even if a
+// future change gets the sums wrong.
+// What produces a visible scrollbar is an element that is BOTH scrollable in x
+// and wider than its box. Measuring scrollWidth alone flags an overflow:visible
+// wrapper whose child pokes out by six pixels — true, and invisible to the
+// person looking at the screen. This checks the thing they can actually see.
+const scrollables = await p.evaluate(() =>
+  [...document.querySelectorAll("*")]
+    .filter((el) => {
+      const ox = getComputedStyle(el).overflowX;
+      return (ox === "auto" || ox === "scroll") && el.scrollWidth > el.clientWidth + 1;
     })
-  )
+    .map((el) => `${el.tagName.toLowerCase()}.${el.className}`.slice(0, 60))
 );
+check("nothing on the page has a horizontal scrollbar", scrollables.length === 0, scrollables.join(" | "));
+
+const tables = await p.$$eval("table.pt-table", (els) =>
+  els.map((t) => ({ table: Math.round(t.getBoundingClientRect().width), frame: t.closest(".pt-scroll").clientWidth }))
+);
+check("every table is exactly as wide as its frame",
+  tables.every((t) => Math.abs(t.table - t.frame) <= 1),
+  tables.map((t) => `${t.table}/${t.frame}`).join(" "));
+check("the wrapper cannot scroll sideways at all",
+  await p.$$eval(".pt-scroll", (els) => els.every((el) => getComputedStyle(el).overflowX === "visible")));
+check("no table carries a min-width", await p.evaluate(() =>
+  [...document.querySelectorAll("table.pt-table")].every((t) => {
+    const mw = getComputedStyle(t).minWidth;
+    return !t.style.minWidth && (mw === "0px" || mw === "auto");
+  })));
+
+// Relations and computed properties are not columns — those were the empty
+// ones pushing the width out.
+const colHeads = await p.$eval("table.pt-table thead tr", (tr) => [...tr.children].map((th) => th.textContent.trim()));
+check("no back-relation columns are rendered",
+  !colHeads.some((h) => ["Goals", "Ideas", "Payments", "Tasks"].includes(h)), colHeads.join(" | "));
+check("the client column is gone, folded into the project cell",
+  !colHeads.includes("Client") && (await rowFor("Brand Relaunch Film").locator(".pt-subline .pt-client").count()) === 1,
+  colHeads.join(" | "));
 
 /* ------------------------------------------------------------------ */
 console.log("\n--- 2. SUB-TASKS SHARE THE PARENT'S COLUMN GRID ---");
@@ -148,6 +142,7 @@ for (const [label, headerText] of [
   ["Deadline", "Deadline"],
   ["Status", "Status"],
   ["Priority", "Priority"],
+  ["Category", "Category"],
 ]) {
   const head = await centre(p.locator("table.pt-table thead th", { hasText: new RegExp(`^${headerText}$`) }).first());
   const cell = await centre(subRow("Shot 01 Animation").locator(`td[data-label="${label}"]`).first());
@@ -218,10 +213,10 @@ check("client sections carry a 'Client project' eyebrow",
   heads.map((h) => `${h.eyebrow || "-"}/${h.title}`).join(" | "));
 check("the personal section has no client eyebrow",
   heads.some((h) => h.title === "Personal project" && !h.eyebrow));
-check("the personal table drops the client-billing headers", await p.evaluate(() => {
+check("the personal table drops the client billing heading", await p.evaluate(() => {
   const sec = [...document.querySelectorAll(".pt-section")].find((s) => s.querySelector("h2")?.textContent?.includes("Personal"));
   const ths = [...sec.querySelectorAll("thead th")].map((t) => t.textContent.trim());
-  return !ths.includes("Client") && ths.includes("Purpose") && ths.includes("Billing");
+  return ths.includes("Billing") && !ths.includes("Payment") && !ths.includes("Client");
 }));
 
 /* ------------------------------------------------------------------ */

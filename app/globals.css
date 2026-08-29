@@ -1911,44 +1911,44 @@ html[data-theme="dark"]{
 
 /* ---------- the table ---------- */
 /*
-   No min-width and no pixel colgroup.
-   Thirteen hardcoded pixel columns summing past 1400px meant every viewport
-   narrower than that got a horizontal scrollbar whether or not the content
-   needed one — the scrollbar was in the stylesheet, not in the data. Auto
-   layout with proportional column hints lets the columns give as the window
-   narrows, and the name column absorbs the slack.
+   The table is exactly as wide as its frame. Always.
 
-   The wrapper keeps `overflow-x:auto` as a safety valve for a workspace with
-   a dozen custom properties; at the default column set it never triggers, so
-   the edge fade is drawn only when the table really is wider than its frame.
+   Every column is a share of 100% under `table-layout:fixed`, so there is no
+   arithmetic left that can push the table past the edge — not a long project
+   name, not a fourteenth custom property, not a narrow laptop. The wrapper
+   has no overflow-x at all, which means a horizontal scrollbar cannot appear
+   even if a future change gets the sums wrong.
+
+   The proportions follow the widths asked for (220 / 96 / 80 / 64 / 96 / 64 /
+   128 / 80 / 96 / 112), normalised: the ratios are what matter, and holding
+   them as percentages is what makes them survive a resize.
 */
-.pt-scroll{ overflow-x:auto; position:relative; }
-/* Only drawn when the table really is wider than its frame, so it marks a
-   real edge rather than suggesting content is cut off when it isn't. */
-.pt-scroll:has(> table[style*="min-width"])::after{
-  content:""; position:sticky; right:0; top:0; float:right;
-  width:30px; height:100%; margin-left:-30px; pointer-events:none;
-  background:linear-gradient(to right, transparent, var(--surface));
-}
-/* table-layout:fixed is what actually holds the table to its frame: it makes
-   the percentage colgroup binding rather than a hint, so a long project name
-   can no longer widen a column and push the table past the viewport. Auto
-   layout ignored the percentages and sized to content — 1806px in a 1110px
-   frame, which is the scrollbar in a different disguise. */
-.pt-table{ width:100%; border-collapse:collapse; table-layout:fixed; min-width:0; }
+.pt-scroll{ position:relative; }
+.pt-table{ width:100%; max-width:100%; border-collapse:collapse; table-layout:fixed; }
 
-/* Widths by what the column actually holds. A date is 10 characters and a
-   status badge is one word, so giving them the same share wastes the first
-   and clips the second. */
-/* Sized so the thirteen designed columns total under 1100px — the content
-   width of a 1440 laptop with the rail open. That is the number that decides
-   whether this screen scrolls sideways at its default column set, and it was
-   worth measuring rather than guessing: the first pass summed to 1290. */
-.pt-table col.c-name{ width:224px; }
-.pt-table col.c-date{ width:82px; }
-.pt-table col.c-mid{ width:92px; }
-.pt-table col.c-narrow{ width:74px; }
-.pt-table col.c-add{ width:32px; }
+/* Percentages over 100 are normalised by the fixed layout, so these are pure
+   ratios — the table still ends exactly at its frame. The name column takes
+   the largest share because it is the only one holding a full sentence. */
+/* No width: the name column takes whatever the others leave, which is what
+   "flex-grow" means in a table — and it means a column hidden at a narrower
+   viewport gives its space to the project name rather than leaving a gap at
+   the right edge.
+
+   The percentages below therefore have to sum to about 74, not 100. They did
+   sum to 92 on the first attempt, which left the name 8% and collapsed it to
+   nothing: `auto` is not "as much as it needs", it is "whatever is left". */
+.pt-table col.c-name{ width:auto; }
+.pt-table col.c-date{ width:7.7%; }
+.pt-table col.c-cat{ width:5.7%; }
+.pt-table col.c-people{ width:4.4%; }
+.pt-table col.c-status{ width:7.7%; }
+.pt-table col.c-when{ width:5.3%; }
+.pt-table col.c-next{ width:7.3%; }
+.pt-table col.c-prio{ width:6.1%; }
+.pt-table col.c-files{ width:6.5%; }
+.pt-table col.c-money{ width:7.3%; }
+.pt-table col.c-custom{ width:3.6%; }
+.pt-table col.c-add{ width:1.6%; }
 
 .pt-table th{
   text-align:left; font-size:10.5px; font-weight:600; color:var(--ink-muted);
@@ -1968,10 +1968,57 @@ html[data-theme="dark"]{
 .pt-table td{
   padding:9px 6px; vertical-align:middle; font-size:12px; color:var(--ink-secondary);
 }
-.pt-table td > .ed-cell,
-.pt-table td > div > .ed-cell,
+/*
+  Below 1300px, two columns leave rather than every column shrinking.
+
+  Thirteen columns in 900px of table means 69px each, and at that width every
+  cell reads "Lu…", "08/20/…", "Plann" — technically no scrollbar and
+  practically no information. "Updated" is Notion metadata and "Next task"
+  repeats what expanding the row shows, so they are the two that can go
+  without anyone needing to look somewhere else for the answer. Hiding the
+  <col> as well as the cells is what keeps the remaining columns aligned.
+*/
+@media (max-width: 1300px){
+  .pt-table col.c-when, .pt-table col.c-next, .pt-table col.c-custom{ display:none; }
+  .pt-table th.h-when, .pt-table th.h-next, .pt-table th.h-custom,
+  .pt-table td[data-label="Updated"], .pt-table td[data-label="Next task"],
+  .pt-table td.td-custom{ display:none; }
+  /* Custom properties go too — at this width a 42px column shows nothing —
+     and with them the control that adds more. */
+  .pt-table th.pt-add-col{ display:none; }
+  .pt-table col.c-add{ display:none; }
+  /* One point off the date type is the difference between "08/20/2026" and
+     "08/20/20…" in a 69px column. */
+  .pt-table td[data-label="Start"] .ed-cell,
+  .pt-table td[data-label="Deadline"] .ed-cell{ font-size:11.5px; }
+}
+
+/*
+  The picker chevron costs 14px in a 59px badge column — the difference
+  between "Delivered" and "Delivere". It appears on hover and focus, where it
+  is doing its job of saying "this is editable", and stays out of the way the
+  rest of the time.
+*/
+.pt-table td[data-label="Status"] .ed-cell > svg,
+.pt-table td[data-label="Priority"] .ed-cell > svg,
+.pt-table td[data-label="Category"] .ed-cell > svg{
+  width:0; opacity:0; transition:width .1s ease, opacity .1s ease;
+}
+.pt-table tr:hover td[data-label="Status"] .ed-cell > svg,
+.pt-table tr:hover td[data-label="Priority"] .ed-cell > svg,
+.pt-table tr:hover td[data-label="Category"] .ed-cell > svg,
+.pt-table td .ed-cell:focus-visible > svg{ width:11px; opacity:0.7; }
+
+/* Truncate, never wrap, never spill — and never change a cell's `display`.
+   A <td> set to block or flex stops being a table cell and leaves the shared
+   column grid, taking every cell after it out of line with the headers. The
+   ellipsis trio works on a table-cell as it is; only the display change was
+   ever the problem, and it is the second time it crept in. */
 .pt-table td.pt-muted,
 .pt-table td.pt-inherit{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pt-table td .ed-cell,
+.pt-table td .pt-next-title,
+.pt-table td .pt-client{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* A cell with no inline editor in it has no popover to clip, so it can hold
    its own content — which is what stops "Check here" printing across the
    budget figure in the column beside it. */
@@ -1986,11 +2033,18 @@ html[data-theme="dark"]{
 .pt-name-cell{ padding-left:14px !important; }
 .pt-name{ display:flex; align-items:flex-start; gap:7px; min-width:0; }
 .pt-name-text{ min-width:0; flex:1; }
-.pt-headline{
-  display:block; font-size:11px; color:var(--ink-muted); line-height:1.45;
+.pt-subline{
+  display:flex; align-items:center; gap:7px; min-width:0;
   margin-top:1px; padding-left:9px;
-  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
+.pt-subline > *{ min-width:0; }
+.pt-subline .ed-cell{ font-size:11px; padding:1px 3px; min-height:0; }
+.pt-headline{
+  font-size:11px; color:var(--ink-muted); line-height:1.45;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1 1 auto;
+}
+/* Budget and its settlement state, stacked in one cell. */
+.pt-pay{ display:inline-block; margin-top:3px; font-size:9.5px; }
 .pt-client{ display:inline-flex; align-items:center; gap:6px; min-width:0; }
 .pt-client .company-dot{ flex-shrink:0; }
 .pt-cats{ display:inline-flex; gap:4px; align-items:center; white-space:nowrap; }
@@ -2080,10 +2134,14 @@ html[data-theme="dark"]{
 
 .pt-sub-title{ min-width:0; flex:1 1 auto; overflow:hidden; }
 /* Nothing in a data cell may set its own width past the column. */
+/* Badges are sized to the column, not the other way round. A pill wide
+   enough to read "Rendering-Ready" in full would set the width of every
+   status column in the table. */
 .pt-table td .badge, .pt-table td .prio, .pt-table td .tag{
   max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  padding-left:7px; padding-right:7px; font-size:10.5px;
+  padding:2px 6px; font-size:10px; letter-spacing:0;
 }
+.pt-table .pt-res, .pt-table .pt-res-link{ font-size:11px; }
 .pt-sub-count{
   font-size:10.5px; color:var(--ink-muted); font-variant-numeric:tabular-nums;
   white-space:nowrap; flex-shrink:0;
@@ -2470,7 +2528,9 @@ html[data-theme="dark"] .btn-danger:hover:not(:disabled){ filter:brightness(1.1)
 }
 
 /* ---------- add-property button and custom columns ---------- */
-.pt-add-col{ width:44px; padding-left:6px !important; padding-right:6px !important; }
+/* No fixed width: the colgroup owns every column's share, and a 44px cell
+   here was the last six pixels pushing the table past its frame. */
+.pt-add-col{ padding-left:4px !important; padding-right:4px !important; }
 .ap-wrap{ position:relative; display:flex; justify-content:center; }
 .ap-btn{
   width:24px; height:24px; position:relative; border-radius:6px;
@@ -2543,8 +2603,6 @@ html[data-theme="dark"] .btn-danger:hover:not(:disabled){ filter:brightness(1.1)
    scroll people may not notice. The markup stays one table — a second React
    tree for mobile is a second place for a column to go missing. */
 @media (max-width: 900px){
-  .pt-scroll{ overflow-x:visible; }
-  .pt-scroll::after{ display:none; }
   .pt-table{ min-width:0 !important; display:block; }
   .pt-table colgroup, .pt-table thead{ display:none; }
   .pt-table tbody{ display:block; }
@@ -2707,40 +2765,100 @@ html[data-theme="dark"] .btn-danger:hover:not(:disabled){ filter:brightness(1.1)
 
 
 /* ==================================================================
-   Projects: the dark luxury surface
+   Projects: the obsidian surface
    ==================================================================
-   The reference for this screen is near-black — #0B0F17 with hairline
-   borders — while the rest of the app runs the warmer, lower-glare palette
-   that was tuned for reading all day. Both can be true: this scopes the
-   cooler surface to the Projects tables in dark mode only, so the screen
-   matches its design without repainting Today, Finance and the rest.
+   The reference for this screen is near-black with hairline dividers, while
+   the rest of the app runs the warmer, lower-glare palette tuned for reading
+   all day. Both can be true: this scopes the cooler surface to the Projects
+   tables in dark mode only, so the screen matches its design without
+   repainting Today, Finance and the rest.
 
-   Light mode is untouched. Flipping a light theme to #0B0F17 would not be
+   Light mode is untouched. Flipping a light theme to #0D111A would not be
    "luxury dark", it would be one screen in the wrong theme.
    ================================================================== */
 html[data-theme="dark"] .pt-section{
-  --surface:#0B0F17;
-  --surface-raised:#111725;
-  --field:#0E1420;
-  --rail:#141B2A;
-  --border:rgba(148,163,184,0.10);
-  --border-strong:rgba(148,163,184,0.22);
-  --control-edge:#5b6577;
+  --surface:#0D111A;
+  --surface-raised:#141926;
+  --field:#101622;
+  --rail:rgba(255,255,255,0.02);
+  --border:rgba(255,255,255,0.04);
+  --border-strong:rgba(255,255,255,0.10);
+  --control-edge:#4c566b;
+  --ink:#e8ecf3;
+  --ink-secondary:#b6becd;
+  --ink-muted:#7c8698;
   background:var(--surface);
-  border-color:var(--border-strong);
+  border:1px solid rgba(255,255,255,0.05);
 }
 html[data-theme="dark"] .pt-section .pt-section-head{
-  background:linear-gradient(180deg, #131A28 0%, #0B0F17 100%);
-  border-bottom:1px solid var(--border);
+  background:rgba(255,255,255,0.015);
+  border-bottom:1px solid rgba(255,255,255,0.05);
 }
 html[data-theme="dark"] .pt-table thead th{
-  background:#111725;
-  color:#93a0b4;
+  background:transparent;
+  border-bottom:1px solid rgba(255,255,255,0.06);
+  color:#7c8698;
 }
+
+/* Hairline dividers and a hover that is felt more than seen. A row highlight
+   heavy enough to notice on its own turns a table of twenty rows into twenty
+   competing surfaces. */
+html[data-theme="dark"] .pt-row > td{ border-top:1px solid rgba(255,255,255,0.04); }
+html[data-theme="dark"] .pt-row:hover > td,
+html[data-theme="dark"] .pt-row.open > td{ background:rgba(255,255,255,0.02); }
 html[data-theme="dark"] .pt-sub > td,
 html[data-theme="dark"] .pt-addrow > td,
-html[data-theme="dark"] .pt-sub-empty{ background:#0E1420; }
-html[data-theme="dark"] .pt-sub:hover > td{ background:#141B2A; }
+html[data-theme="dark"] .pt-sub-empty{
+  background:rgba(255,255,255,0.012);
+  border-top:1px solid rgba(255,255,255,0.04);
+}
+html[data-theme="dark"] .pt-sub:hover > td{ background:rgba(255,255,255,0.03); }
+html[data-theme="dark"] .pt-progress{ background:rgba(255,255,255,0.06); }
+
+/* ---- badges: a tinted fill, a bright label, a matching hairline ----
+   Same three-part recipe for every state, so a status and a priority read as
+   the same kind of object and only the hue carries the meaning. */
+html[data-theme="dark"] .pt-section .badge,
+html[data-theme="dark"] .pt-section .prio{
+  border:1px solid transparent; font-weight:600;
+}
+/* Done / Delivered / Paid / Active — emerald */
+html[data-theme="dark"] .pt-section .badge.paid{
+  background:rgba(16,185,129,0.10); color:#34d399; border-color:rgba(16,185,129,0.20);
+}
+/* In progress / Production — amber */
+html[data-theme="dark"] .pt-section .badge.med{
+  background:rgba(245,158,11,0.10); color:#fbbf24; border-color:rgba(245,158,11,0.20);
+}
+/* Review / rendering / pending invoice — sky, so "waiting on someone" is not
+   the same colour as "in production". */
+html[data-theme="dark"] .pt-section .badge.high{
+  background:rgba(14,165,233,0.10); color:#38bdf8; border-color:rgba(14,165,233,0.22);
+}
+/* Blocked / overdue — ruby */
+html[data-theme="dark"] .pt-section .badge.overdue{
+  background:rgba(244,63,94,0.10); color:#fb7185; border-color:rgba(244,63,94,0.20);
+}
+/* Idea / backlog / not started — slate */
+html[data-theme="dark"] .pt-section .badge.pending{
+  background:rgba(39,39,42,0.9); color:#d4d4d8; border-color:rgba(63,63,70,0.5);
+}
+html[data-theme="dark"] .pt-section .prio.urgent,
+html[data-theme="dark"] .pt-section .prio.high{
+  background:rgba(244,63,94,0.10); color:#fb7185; border-color:rgba(244,63,94,0.20);
+}
+html[data-theme="dark"] .pt-section .prio.medium{
+  background:rgba(39,39,42,0.9); color:#d4d4d8; border-color:rgba(63,63,70,0.5);
+}
+html[data-theme="dark"] .pt-section .prio.low{
+  background:rgba(255,255,255,0.04); color:#8b94a5; border-color:rgba(255,255,255,0.07);
+}
+/* Links */
+html[data-theme="dark"] .pt-section .pt-res,
+html[data-theme="dark"] .pt-section .pt-res-link{ color:#38bdf8; font-size:11.5px; font-weight:500; }
+html[data-theme="dark"] .pt-section .pt-res:hover,
+html[data-theme="dark"] .pt-section .pt-res-link:hover{ color:#7dd3fc; }
+html[data-theme="dark"] .pt-section .pt-branch{ border-color:rgba(255,255,255,0.10); }
 
 /* The section header, two lines: what kind of work, then whose. */
 .pt-section-eyebrow{

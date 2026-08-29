@@ -324,8 +324,8 @@ function ProjectRowView({
   const { clientOptions, categoryOptions, teamOptions, statusOptions, priorityOptions, currency } = options;
   const p = row.project;
   const nav = (col: number): CellNav => ({ row: rowIndex, col });
-  // Thirteen fixed columns, the user's custom ones, and the add-property cell.
-  const columns = 14 + options.custom.length;
+  // Eleven fixed columns, the user's custom ones, and the add-property cell.
+  const columns = 12 + options.custom.length;
 
   return (
     <>
@@ -371,7 +371,32 @@ function ProjectRowView({
                 onSave={(name) => handlers.patch(p.id, { name }, { name })}
                 nav={nav(0)}
               />
-              {p.headline && <span className="pt-headline">{p.headline}</span>}
+              <span className="pt-subline">
+                {!personal && (
+                  <SelectCell
+                    value={row.client?.name}
+                    options={clientOptions}
+                    placeholder="No client"
+                    heading="Client"
+                    // The workspace resolves the name to its relation id; the
+                    // table only ever knows names.
+                    onSave={(clientName) => handlers.patch(p.id, {}, { clientName })}
+                    render={(v) => (
+                      <span className="pt-client">
+                        {row.company?.colorVar && (
+                          <span className="company-dot" style={{ background: `var(${row.company.colorVar})` }} />
+                        )}
+                        {v}
+                      </span>
+                    )}
+                    nav={nav(1)}
+                  />
+                )}
+                {/* Client or headline, not both. Two pieces of small text
+                    sharing 200px means each gets 100 and neither is readable
+                    — the client name is the one that identifies the row. */}
+                {personal && p.headline && <span className="pt-headline">{p.headline}</span>}
+              </span>
             </div>
           </div>
         </td>
@@ -401,33 +426,6 @@ function ProjectRowView({
             <span className={`pt-days ${row.urgency}`}>
               {row.daysLeft < 0 ? `${Math.abs(row.daysLeft)}d over` : row.daysLeft === 0 ? "today" : `${row.daysLeft}d`}
             </span>
-          )}
-        </td>
-
-        {/* 3 — client, or purpose for personal work */}
-        <td data-label={personal ? "Purpose" : "Client"}>
-          {personal ? (
-            <TextCell
-              value={p.headline || ""}
-              placeholder="What is it for?"
-              onSave={(headline) => handlers.patch(p.id, { headline }, { headline })}
-              nav={nav(3)}
-            />
-          ) : (
-            <SelectCell
-              value={row.client?.name}
-              options={clientOptions}
-              placeholder="Set client"
-              heading="Client"
-              onSave={(name) => handlers.patch(p.id, { clientName: name }, { clientName: name })}
-              render={(name) => (
-                <span className="pt-client">
-                  <span className="company-dot" style={{ background: avatarColor(name) }} />
-                  {name}
-                </span>
-              )}
-              nav={nav(3)}
-            />
           )}
         </td>
 
@@ -526,35 +524,36 @@ function ProjectRowView({
           </button>
         </td>
 
-        {/* 11 & 12 — budget and where the money is. Personal work has neither. */}
+        {/* Budget and payment in one cell: the figure with its settlement
+            state under it. Two columns for one fact about money was 190px of
+            a window that had none to give. */}
         {personal ? (
-          <td className="pt-muted" colSpan={2} data-label="Billing">
-            Internal — no billing
+          <td className="pt-muted" data-label="Billing">
+            Internal
           </td>
         ) : (
-          <>
-            <td data-label="Budget">
-              <NumberCell
-                value={p.value}
-                prefix={currency === "LKR" ? "Total Rs " : "Total $"}
-                onSave={(v) => handlers.patch(p.id, { value: v }, { value: v ?? "" })}
-                nav={nav(11)}
-              />
-            </td>
-            <td data-label="Payment">
-              <span className={paymentBadge[row.payment.state] ?? "badge pending"} title={
+          <td data-label="Budget">
+            <NumberCell
+              value={p.value}
+              prefix={currency === "LKR" ? "Rs " : "$"}
+              onSave={(v) => handlers.patch(p.id, { value: v }, { value: v ?? "" })}
+              nav={nav(11)}
+            />
+            <span
+              className={`${paymentBadge[row.payment.state] ?? "badge pending"} pt-pay`}
+              title={
                 row.payment.invoiced
                   ? `${money(row.payment.paid, currency)} paid of ${money(row.payment.invoiced, currency)} invoiced`
                   : "No invoice raised against this project yet"
-              }>
-                {row.payment.state}
-              </span>
-            </td>
-          </>
+              }
+            >
+              {row.payment.state}
+            </span>
+          </td>
         )}
 
         {options.custom.map((prop, i) => (
-          <td key={prop.name} data-label={prop.name}>
+          <td key={prop.name} className="td-custom" data-label={prop.name}>
             <CustomCell
               prop={prop}
               value={p.custom?.[prop.name]}
@@ -694,55 +693,56 @@ export default function ProjectTree({
                   the content needed one. Percentages let the columns shrink
                   with the window, and the name column keeps the slack.
                 */}
-                <table
-                  className="pt-table"
-                  /*
-                    The thirteen designed columns fit any laptop, so at the
-                    default set the table never scrolls — that was the
-                    complaint. Custom Notion properties are additive and
-                    unbounded, though, and squeezing a fourteenth and
-                    fifteenth column into the same width clips all fifteen.
-                    So the scroll comes back only in proportion to what the
-                    workspace added, and only then does the edge fade show.
-                  */
-                  style={options.custom.length ? { minWidth: 1150 + options.custom.length * 110 } : undefined}
-                >
+                {/*
+                  No min-width and no inline width. Every column is a share of
+                  100%, so the table is exactly as wide as its frame whatever
+                  the window or the number of custom properties — there is no
+                  arithmetic left that can push it past the edge.
+                */}
+                <table className="pt-table">
                   <colgroup>
                     <col className="c-name" />
                     <col className="c-date" />
                     <col className="c-date" />
-                    <col className="c-mid" />
-                    <col className="c-mid" />
-                    <col className="c-narrow" />
-                    <col className="c-mid" />
-                    <col className="c-narrow" />
-                    <col className="c-mid" />
-                    <col className="c-narrow" />
-                    <col className="c-narrow" />
-                    <col className="c-narrow" />
-                    <col className="c-narrow" />
+                    <col className="c-cat" />
+                    <col className="c-people" />
+                    <col className="c-status" />
+                    <col className="c-when" />
+                    <col className="c-next" />
+                    <col className="c-prio" />
+                    <col className="c-files" />
+                    <col className="c-money" />
                     {options.custom.map((prop) => (
-                      <col key={prop.name} className="c-mid" />
+                      <col key={prop.name} className="c-custom" />
                     ))}
                     <col className="c-add" />
                   </colgroup>
                   <thead>
                     <tr>
+                      {/*
+                        Eleven columns, not thirteen. Client moved into the
+                        project cell as its sub-line — it is an attribute of
+                        the name, it was costing 92px of a window that had
+                        none to spare, and the section above already says
+                        which company the work belongs to.
+                      */}
                       <th>Project</th>
                       <th>Start</th>
                       <th>Deadline</th>
-                      <th>{personal ? "Purpose" : "Client"}</th>
                       <th>Category</th>
                       <th>Assigned</th>
                       <th>Status</th>
-                      <th>Updated</th>
-                      <th>Next task</th>
+                      <th className="h-when">Updated</th>
+                      <th className="h-next">Next task</th>
                       <th>Priority</th>
                       <th>Files</th>
                       <th>{personal ? "Billing" : "Budget"}</th>
-                      <th>{personal ? "" : "Payment"}</th>
                       {options.custom.map((prop) => (
-                        <th key={prop.name} title={`${prop.type}${prop.editable ? "" : " — computed by Notion"}`}>
+                        <th
+                          key={prop.name}
+                          className="h-custom"
+                          title={`${prop.type}${prop.editable ? "" : " — computed by Notion"}`}
+                        >
                           {prop.name}
                         </th>
                       ))}

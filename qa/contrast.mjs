@@ -106,4 +106,39 @@ for (const [theme, vars] of [["light", light], ["dark", dark]]) {
     }
   }
 }
+/* ------------------------------------------------------------------ */
+/* The Projects screen's obsidian palette                              */
+/*                                                                     */
+/* These are literal values rather than tokens — the badge recipe is a
+   tinted fill over a known surface — so the token sweep above cannot see
+   them. Checking them here is the difference between "every pair meets AA"
+   being a measurement and being a hope.                                */
+/* ------------------------------------------------------------------ */
+const OBSIDIAN = [13, 17, 26]; // #0D111A
+const LITERAL = [
+  ["#e8ecf3", null, 4.5, "body text"],
+  ["#b6becd", null, 4.5, "secondary text"],
+  ["#7c8698", null, 3, "muted labels and headers"],
+  ["#38bdf8", null, 4.5, "links"],
+  ["#34d399", "rgba(16,185,129,0.10)", 4.5, "emerald badge — done, delivered, paid"],
+  ["#fbbf24", "rgba(245,158,11,0.10)", 4.5, "amber badge — in progress, production"],
+  ["#38bdf8", "rgba(14,165,233,0.10)", 4.5, "sky badge — review, pending"],
+  ["#fb7185", "rgba(244,63,94,0.10)", 4.5, "ruby badge — blocked, overdue, high"],
+  ["#d4d4d8", "rgba(39,39,42,0.9)", 4.5, "slate badge — backlog, normal"],
+  ["#8b94a5", "rgba(255,255,255,0.04)", 3, "low priority"],
+];
+
+console.log("\n=== projects, obsidian surface ===");
+for (const [fg, bgTint, min, what] of LITERAL) {
+  const bg = bgTint ? over(parse(bgTint, {}), OBSIDIAN) : OBSIDIAN;
+  const r = (() => {
+    const f = over(parse(fg, {}), bg);
+    const [a, b2] = [lum(f), lum(bg)].sort((x, y) => y - x);
+    return (a + 0.05) / (b2 + 0.05);
+  })();
+  const ok = r >= min;
+  if (!ok) fails++;
+  if (!ok || process.env.VERBOSE) console.log(`  ${ok ? "ok  " : "FAIL"} ${r.toFixed(2)}:1 (min ${min})  ${what}`);
+}
+
 console.log(fails ? `\n${fails} pair(s) below AA` : "\nevery pair meets AA");

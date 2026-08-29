@@ -165,7 +165,7 @@ function AddTaskRow({
       <td>
         <input className="pt-inline-input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} aria-label="Deadline" />
       </td>
-      <td />
+      {/* Category, Assigned */}
       <td />
       <td />
       <td>
@@ -177,6 +177,7 @@ function AddTaskRow({
           ))}
         </select>
       </td>
+      {/* Updated, Next task */}
       <td />
       <td />
       <td>
@@ -188,7 +189,7 @@ function AddTaskRow({
           ))}
         </select>
       </td>
-      <td className="pt-inline-actions" colSpan={columns - 10}>
+      <td className="pt-inline-actions" colSpan={columns - 9}>
         <button type="button" className="btn-save" onClick={submit} disabled={saving || !title.trim()}>
           {saving ? "Adding…" : "Add"}
         </button>
@@ -338,12 +339,9 @@ function TaskRow({
           />
         </td>
 
-        {/* Client and Category belong to the project, not the task. Repeating
-            the parent's value down every sub-row reads as data the task
-            carries — it doesn't, and a blank says so. */}
-        <td className="pt-inherit" data-label="Client">
-          —
-        </td>
+        {/* Category belongs to the project, not the task. Repeating the
+            parent's value down every sub-row reads as data the task carries —
+            it doesn't, and a blank says so. */}
         <td data-label="Category">
           {task.tags && task.tags.length ? <span className="tag">{task.tags[0]}</span> : <span className="pt-inherit">—</span>}
         </td>
@@ -413,9 +411,9 @@ function TaskRow({
           )}
         </td>
 
-        {/* Budget and payment are the project's, and a task has no invoice.
-            Everything past Files is filler rather than a repeated figure. */}
-        <td colSpan={columns - 11} />
+        {/* Budget is the project's, and a task has no invoice. Everything past
+            Files is filler rather than a repeated figure. */}
+        <td colSpan={columns - 10} />
       </tr>
 
       {isOpen &&

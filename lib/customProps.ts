@@ -74,6 +74,16 @@ export function customProperties(
 ): CustomProperty[] {
   return Object.entries(properties)
     .filter(([name, def]) => !RESERVED_PROPERTY_NAMES.has(name) && def.type !== "title")
+    // Relations and the types Notion computes are not columns.
+    //
+    // A Notion database accumulates back-relations: link Projects to Goals,
+    // Ideas, Payments and Tasks and four relation properties appear on
+    // Projects, every one of them a column of "—" on this screen and every
+    // one of them pushing the table past the window. They are real data, but
+    // they belong on the pages they point at, not as four empty columns here.
+    // Rollups and formulas are the same story with an extra cost: they can't
+    // be written, so a cell that looks editable would silently fail.
+    .filter(([, def]) => !NON_COLUMN_TYPES.has(def.type))
     .map(([name, def]) => ({
       name,
       type: def.type,
@@ -82,6 +92,26 @@ export function customProperties(
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
+
+/**
+ * Types that never become a table column.
+ *
+ * Relations are back-links to other databases; rollups, formulas and the
+ * created/edited stamps are computed by Notion and cannot be written. Both
+ * kinds would occupy a column's width to show nothing useful.
+ */
+const NON_COLUMN_TYPES = new Set([
+  "relation",
+  "rollup",
+  "formula",
+  "created_time",
+  "created_by",
+  "last_edited_time",
+  "last_edited_by",
+  "unique_id",
+  "button",
+  "verification",
+]);
 
 /** Reads one property off a Notion page into something a cell can render. */
 export function readCustomValue(prop: unknown): string | number | boolean | string[] | undefined {
