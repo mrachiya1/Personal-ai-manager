@@ -27,12 +27,13 @@ import { computeDayEnergy, buildGreeting, focusWindows, focusHoursRemaining, typ
 import {
   deepWorkCapacity,
   metricCards,
-  scheduleToday,
   visionLine,
   type DeepWorkCapacity,
   type MetricCard,
   type ScheduledBlock,
 } from "./dashboard";
+import { buildDayPlan, type DayPlan } from "./dayPlan";
+import { getWorkWindow, type WorkWindow } from "./workday";
 import { formatLocalTime, localDateISO, localHour, tzOffset } from "./timezone";
 import { getUiOverrides, type UiOverrides } from "./uiOverrides";
 import { currentUser } from "@/auth";
@@ -65,6 +66,18 @@ export interface TodayView {
   schedule: { blocks: ScheduledBlock[]; live: boolean };
   /** True when the blocks on screen were placed by chat, not by the allocator. */
   scheduleManual: boolean;
+  /** The hours the day was planned inside, and where they came from. */
+  workWindow: WorkWindow;
+  /**
+   * The same allocation the schedule shows, in its two-level form.
+   *
+   * One allocator produces both: the flat block list the schedule panel and
+   * the Assistant have always read, and the segments the work-window card and
+   * Google Calendar need. Two allocators would eventually disagree, and the
+   * one place that must never happen is between what the screen says and what
+   * lands in someone's calendar.
+   */
+  plan: DayPlan;
   currency: string;
   goalCurrency: string;
   payments: Awaited<ReturnType<typeof getPayments>>;
@@ -146,24 +159,58 @@ export async function buildTodayView(dateISO: string = localDateISO()): Promise<
   });
 
   /* ---------- the plan, laid onto the clock ---------- */
+  //
+  // Inside the hours the operator stated, not inside daylight. This person
+  // wakes at 06:00 some days and 11:30 on others; a plan that always begins
+  // at sunrise is wrong on most of them, and being wrong about when the day
+  // starts makes everything downstream wrong too.
+  //
+  // The calendar is not read here. This runs on every dashboard render, and a
+  // Google round trip in that path would put a third-party outage in front of
+  // the Today page. /api/plan and the push route read it; the screen shows the
+  // shape of the day and the card fetches the booked-aware version.
   const live = ctx.projects.filter((p) => p.status !== "Delivered");
-  const dueToday = ctx.tasks.filter((t) => t.dueDate === todayISO && t.status !== "Done");
   const shippingToday = live.filter((p) => p.deadline === todayISO);
+  const workWindow = await getWorkWindow(todayISO);
 
-  const schedule = scheduleToday({
-    tasks: dueToday,
+  const plan = buildDayPlan({
+    window: workWindow,
+    tasks: ctx.tasks,
     projects: ctx.projects,
-    clients,
-    companies: ctx.companies,
-    currency,
-    windows,
-    todayISO,
+    horaDay: ctx.horaDay,
+    panchang: ctx.panchang,
+    busy: [],
+    busyUnknown: true,
     now,
+    todayISO,
   });
+
+  // The flat form the schedule panel and the Assistant have always read. Both
+  // views come out of the one allocation, so they cannot drift apart.
+  const schedule: { blocks: ScheduledBlock[]; live: boolean } = {
+    blocks: plan.segments.flatMap((seg) =>
+      seg.tasks.map((t) => {
+        const project = ctx.projects.find((p) => p.id === t.projectId);
+        return {
+          id: t.id,
+          title: t.title,
+          start: t.start,
+          end: t.end,
+          done: false,
+          vision: project ? visionLine(project, clients, ctx.companies, currency) : "",
+          projectName: t.projectName,
+          milestone: t.urgency === "overdue" ? ("late" as const) : t.urgency === "today" ? ("today" as const) : null,
+          planet: seg.planets[0],
+        };
+      })
+    ),
+    live: !workWindow.over,
+  };
+
   // Project deadlines landing today aren't tasks and can't be ticked, but they
   // would be invisible on the one day they matter most.
   for (const p of shippingToday) {
-    if (dueToday.some((t) => t.projectId === p.id)) continue;
+    if (schedule.blocks.some((b) => b.projectName === p.name)) continue;
     schedule.blocks.push({
       id: `project:${p.id}`,
       title: p.name,
@@ -236,6 +283,8 @@ export async function buildTodayView(dateISO: string = localDateISO()): Promise<
     cards,
     schedule,
     scheduleManual,
+    workWindow,
+    plan,
     currency,
     goalCurrency,
     payments,
@@ -296,6 +345,25 @@ export function describeUiState(view: TodayView): string {
   lines.push(
     `Deep-work capacity: ${view.capacity.label} (${view.capacity.tone}) — "${view.capacity.reason}"` +
       (view.sleepHours !== undefined ? `. Last sleep logged: ${view.sleepHours.toFixed(1)}h.` : ". No sleep logged.")
+  );
+
+  // The hours the whole plan is built inside. Without this the model would
+  // discuss an 8am block on a day the operator told the app they started at
+  // eleven — the same class of error the rest of this function exists to stop.
+  const w = view.workWindow;
+  const sourceWord = {
+    manual: "set by the user for today",
+    wake: "derived from when they tapped Woke Up, and accepted",
+    pattern: "their saved usual day — NOT set for today specifically",
+    default: "the app's fallback — the user has never set their hours",
+  }[w.source];
+  lines.push(
+    `workWindow: ${w.start}–${w.end} (${sourceWord})${w.over ? ", and it has already ended today" : `, ${Math.round(w.remainingMinutes / 6) / 10}h of it left`}. ` +
+      `Everything in calendarPlan is placed inside this window and nowhere else.`
+  );
+  lines.push(
+    `planSegments: ${view.plan.segments.map((s) => `${t(s.start)}–${t(s.end)} ${s.label}${s.tasks.length ? ` (${s.tasks.length})` : " (empty)"}`).join(", ") || "none"}` +
+      (view.plan.unplaced.length ? `. ${view.plan.unplaced.length} open task(s) did NOT fit in these hours.` : "")
   );
 
   lines.push(`topMetrics — the six cards, left to right, exactly as displayed:`);

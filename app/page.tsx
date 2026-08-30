@@ -10,6 +10,8 @@ import SchedulePanel from "@/components/today/SchedulePanel";
 import FinanceGoalsPanel from "@/components/today/FinanceGoalsPanel";
 import LearningPanel from "@/components/today/LearningPanel";
 import QuickAdds from "@/components/today/QuickAdds";
+import WorkWindowCard from "@/components/today/WorkWindowCard";
+import { isGoogleCalendarConnected } from "@/lib/googleCalendar";
 
 /**
  * What to call the whole operation, read off the workspace rather than
@@ -37,7 +39,7 @@ function groupName(names: string[]): string {
  */
 export default async function TodayPage() {
   const view = await buildTodayView();
-  const { ctx, offset, now, greeting, energy, cards, schedule, overrides } = view;
+  const { ctx, offset, now, greeting, energy, cards, schedule, overrides, workWindow, plan } = view;
 
   const dateLabel = new Date(`${ctx.dateISO}T12:00:00Z`).toLocaleDateString("en-US", {
     weekday: "long",
@@ -86,6 +88,15 @@ export default async function TodayPage() {
 
       {ctx.connected && (
         <>
+          {/* Above the metrics on purpose: the hours govern every allocation
+              below them, and stating them is the first move of the morning. */}
+          <WorkWindowCard
+            window={workWindow}
+            plan={plan}
+            tzOffset={offset}
+            calendarConnected={isGoogleCalendarConnected()}
+          />
+
           <MetricGrid cards={cards} money={money} />
 
           {/* ---------- rest & recharge ---------- */}

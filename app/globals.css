@@ -3107,3 +3107,131 @@ html[data-theme="dark"] .pt-section .pt-res-link:hover{ color:#7dd3fc; }
 .pm-readonly{ font-size:12px; color:var(--ink-muted); }
 .pm-foot{ display:flex; align-items:center; gap:10px; padding-top:6px; border-top:1px solid var(--border); }
 .pm-note{ font-size:11.5px; color:var(--ink-muted); }
+
+/* ==================================================================
+   The work window, and the day built inside it
+   ==================================================================
+   Sits at the top of Today because it governs everything under it. Two
+   states in one card: the hours as a statement, and the hours as a pair of
+   inputs. The card does not grow or shrink between them by more than a few
+   pixels — a control that reflows the page when you click Change is a
+   control people click less.
+*/
+.card.ww-card{ padding:15px 18px 16px; margin-bottom:14px; }
+.ww-head{ display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+.ww-hours{ min-width:0; flex:1 1 auto; }
+.ww-label{
+  display:block; font-size:10.5px; font-weight:650; letter-spacing:0.06em;
+  text-transform:uppercase; color:var(--ink-muted); margin-bottom:5px;
+}
+.ww-show{ display:flex; align-items:baseline; gap:11px; flex-wrap:wrap; }
+.ww-range{ font-size:19px; font-weight:650; letter-spacing:-0.015em; color:var(--ink); font-variant-numeric:tabular-nums; }
+.ww-source{ font-size:11.5px; color:var(--ink-secondary); }
+/* A pattern or a default is a guess about today, not a statement about it.
+   The lighter treatment is the difference, and it is why the card opens in
+   edit mode the very first time. */
+.ww-source.soft{ color:var(--ink-muted); font-style:italic; }
+
+.ww-edit{ display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.ww-time{
+  font:inherit; font-size:14px; font-variant-numeric:tabular-nums;
+  padding:7px 10px; border-radius:var(--radius-sm);
+  border:1px solid var(--border-strong); background:var(--field); color:var(--ink);
+  min-height:38px;
+}
+.ww-time:focus{ outline:2px solid var(--blue); outline-offset:1px; }
+.ww-dash{ font-size:12.5px; color:var(--ink-muted); }
+.ww-usual{
+  display:inline-flex; align-items:center; gap:7px;
+  font-size:12px; color:var(--ink-secondary); cursor:pointer; user-select:none;
+}
+/* 24px because that is the floor a finger needs, and a checkbox cannot carry
+   an ::after hit-box the way the icon buttons in this app do — it is a
+   replaced element, so the box you see is the box you get. */
+.ww-usual input{ width:24px; height:24px; accent-color:var(--blue); cursor:pointer; flex-shrink:0; }
+
+.ww-actions{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
+
+.ww-summary{
+  margin-top:12px; padding-top:11px; border-top:1px solid var(--border);
+  font-size:12.5px; color:var(--ink-secondary); line-height:1.6;
+}
+.ww-summary strong{ color:var(--ink); font-variant-numeric:tabular-nums; }
+.ww-empty{ color:var(--ink-muted); }
+.ww-over{ color:var(--warning-ink); font-weight:600; cursor:help; }
+
+.ww-segments{ list-style:none; margin:11px 0 0 0; padding:0; display:grid; gap:9px; }
+.ww-seg{
+  border:1px solid var(--border); border-radius:var(--radius-sm);
+  background:var(--field); padding:9px 12px 10px 15px; position:relative;
+}
+/* The spine says which kind of hour this is without spending a second badge
+   on it. */
+.ww-seg::before{
+  content:""; position:absolute; left:0; top:8px; bottom:8px; width:3px;
+  border-radius:0 3px 3px 0; background:var(--ink-muted);
+}
+.ww-seg.deep::before{ background:var(--good); }
+.ww-seg.admin::before{ background:var(--blue); }
+.ww-seg.reset::before{ background:var(--violet-ink); }
+.ww-seg-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.ww-seg-time{ font-size:11.5px; font-weight:650; color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ww-seg-label{ font-size:12px; font-weight:600; color:var(--ink); }
+.ww-seg-planet{ font-size:10.5px; color:var(--ink-muted); }
+.ww-seg-reason{ margin:5px 0 0 0; font-size:11.5px; line-height:1.55; color:var(--ink-secondary); }
+
+.ww-seg-tasks{ list-style:none; margin:7px 0 0 0; padding:0; display:grid; gap:5px; }
+.ww-seg-tasks li{ display:flex; align-items:baseline; gap:9px; font-size:12px; min-width:0; }
+.ww-t-time{ font-size:11px; color:var(--ink-muted); font-variant-numeric:tabular-nums; flex-shrink:0; width:52px; }
+.ww-t-title{ color:var(--ink); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ww-t-project{ font-size:11px; color:var(--ink-muted); margin-left:auto; flex-shrink:0; white-space:nowrap; }
+/* 10px, not 9.5. Below ten a word this short is a smudge rather than a
+   label, and the site audit holds every route to the same floor. */
+.ww-t-flag{
+  font-size:10px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
+  padding:1px 5px; border-radius:5px; flex-shrink:0;
+}
+.ww-t-flag.late{ background:var(--critical-bg); color:var(--critical-ink); }
+.ww-t-empty{ font-size:11.5px; color:var(--ink-muted); }
+.ww-more{ margin-top:9px; }
+
+.ww-busy{ margin:10px 0 0 0; font-size:11.5px; line-height:1.55; color:var(--ink-muted); }
+.ww-note{ margin:9px 0 0 0; font-size:12px; color:var(--good-ink); }
+.ww-error{ margin:9px 0 0 0; font-size:12px; color:var(--critical-ink); }
+.ww-warn{ margin:9px 0 0 0; font-size:11.5px; line-height:1.55; color:var(--warning-ink); }
+
+/* On a phone the hours take the whole first row and the calendar button the
+   whole second one — a 38px time input beside a button is not something you
+   can hit accurately at 390px. */
+@media (max-width: 620px){
+  .ww-head{ flex-direction:column; gap:12px; }
+  .ww-actions{ width:100%; }
+  .ww-actions .btn-save{ width:100%; min-height:42px; }
+  .ww-edit{ gap:8px; }
+  .ww-time{ flex:1 1 40%; min-width:110px; }
+  .ww-usual{ flex:1 1 100%; }
+  .ww-edit .btn-save, .ww-edit .btn-discard{ flex:1 1 40%; min-height:40px; }
+  .ww-t-project{ display:none; }
+}
+
+/* The offer that follows tapping "Woke up". A proposal with the answer
+   already filled in — pressing Set is the only thing that writes. */
+.wake-offer{
+  margin-top:14px; padding:13px 15px 14px;
+  border:1px solid var(--border-strong); border-radius:var(--radius-md);
+  background:var(--surface-raised);
+}
+.wo-head{ font-size:13.5px; font-weight:650; color:var(--ink); }
+.wo-body{ margin:5px 0 11px 0; font-size:12.5px; line-height:1.6; color:var(--ink-secondary); }
+.wo-body strong{ color:var(--ink); font-variant-numeric:tabular-nums; }
+.wo-times{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+.wo-times label{
+  display:flex; flex-direction:column; gap:5px;
+  font-size:10.5px; font-weight:650; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-muted);
+}
+.wo-actions{ display:flex; gap:9px; flex-wrap:wrap; }
+.wo-saved{ margin-top:12px; font-size:12.5px; color:var(--good-ink); }
+@media (max-width: 620px){
+  .wo-times label{ flex:1 1 45%; }
+  .wo-actions .btn-save, .wo-actions .btn-discard{ flex:1 1 45%; min-height:40px; }
+}
