@@ -282,6 +282,12 @@ async function _getProjects(): Promise<Project[]> {
     clientRequests: richText(p.properties, "Client Requests") || undefined,
     lastReviewed: dateStart(p.properties, "Last Reviewed"),
     reviewedBy: relationIds(p.properties, "Reviewed By"),
+    // Added by lib/projectSchema.ts. All three read as undefined on a database
+    // that predates them, and every caller treats that as "not set" rather
+    // than erroring — the migration is additive and may not have run yet.
+    order: num(p.properties, "Order"),
+    highlight: select(p.properties, "Highlight") || undefined,
+    notes: richText(p.properties, "Notes") || undefined,
     // Notion maintains this on every page; no property to create.
     lastEditedTime: p.last_edited_time,
     completionFeel: select(p.properties, "Completion Feel") || undefined,
@@ -365,6 +371,51 @@ export interface ProjectSchemaState {
  * and category pickers speak the workspace's own vocabulary instead of a
  * hardcoded list that may not exist in the database at all.
  */
+/**
+ * Adds one option to the Projects database's Category multi-select.
+ *
+ * Notion has no "add option" endpoint — a multi-select's options are replaced
+ * wholesale by a schema PATCH, so this reads the current list and writes it
+ * back with one more on the end. That makes it a read-modify-write, which
+ * makes concurrent adds a real hazard: two tabs adding a category at the same
+ * moment would each write their own list and one would lose. Re-reading
+ * immediately before the write keeps that window to milliseconds, and the
+ * caller gets the full list back so the UI shows the truth rather than its
+ * own optimistic guess.
+ *
+ * Colours are left to Notion. Picking one here would fight whatever the user
+ * has already chosen for their existing options.
+ */
+export async function addCategoryOption(name: string): Promise<{ options: string[] }> {
+  const clean = name.trim();
+  if (!clean) throw new Error("A category needs a name.");
+  if (clean.length > 100) throw new Error("That name is too long for a Notion option.");
+  // Notion rejects commas in select option names outright, and the error it
+  // returns for it names neither the property nor the character.
+  if (clean.includes(",")) throw new Error("Notion doesn't allow commas in a category name.");
+
+  const map = await dbMap();
+  if (!map.projects) throw new Error("No Projects database mapped yet.");
+
+  const db = (await notionFetch(`/databases/${map.projects}`)) as {
+    properties?: Record<string, { type: string; multi_select?: { options?: { name: string }[] } }>;
+  };
+  const current = (db.properties?.Category?.multi_select?.options ?? []).map((o) => o.name).filter(Boolean);
+  if (current.some((o) => o.toLowerCase() === clean.toLowerCase())) {
+    // Already there under a different case. Returning success rather than an
+    // error is right: the user's intent — "I want this category to exist" —
+    // is satisfied, and they do not care which of them typed it first.
+    return { options: current };
+  }
+
+  const next = [...current, clean];
+  await notionFetch(`/databases/${map.projects}`, {
+    method: "PATCH",
+    body: JSON.stringify({ properties: { Category: { multi_select: { options: next.map((n) => ({ name: n })) } } } }),
+  });
+  return { options: next };
+}
+
 export async function ensureProjectSchema(): Promise<ProjectSchemaState> {
   const fallback: ProjectSchemaState = {
     added: [],
@@ -440,6 +491,11 @@ export interface ProjectUpdate {
   completionFeel: string;
   completionNote: string;
   completedOn: string;
+  /** Manual sort position. Fractional on purpose — see reorderProjects(). */
+  order: number;
+  /** A highlight name from HIGHLIGHTS, or "" to clear the mark. */
+  highlight: string;
+  notes: string;
   /** name -> { type, value } for user-added columns. */
   custom: Record<string, { type: string; value: string | number | boolean | string[] | undefined }>;
 }
@@ -478,6 +534,12 @@ function projectProperties(input: Partial<ProjectUpdate>): Record<string, unknow
   if (input.category !== undefined)
     properties.Category = { multi_select: input.category.filter(Boolean).map((name) => ({ name })) };
   if (input.assignedTo !== undefined) properties["Assigned To"] = rel(input.assignedTo);
+  if (input.order !== undefined) properties.Order = { number: input.order };
+  // An empty string clears the select. `{ select: { name: "" } }` is a Notion
+  // API error, not a clear — the same trap Render Priority sits behind above.
+  if (input.highlight !== undefined)
+    properties.Highlight = input.highlight ? { select: { name: input.highlight } } : { select: null };
+  if (input.notes !== undefined) properties.Notes = text(input.notes);
   if (input.value !== undefined) properties.Value = { number: Number.isFinite(input.value) ? input.value : null };
   if (input.headline !== undefined) properties.Headline = text(input.headline);
   if (input.clientRequests !== undefined) properties["Client Requests"] = text(input.clientRequests);

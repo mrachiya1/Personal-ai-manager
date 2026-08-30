@@ -14,6 +14,7 @@ import {
   type CellNav,
   type PickOption,
 } from "./editable";
+import { HIGHLIGHTS } from "@/lib/projectSchema";
 import { avatarColor } from "./cells";
 import AddPropertyButton from "./AddPropertyButton";
 import Thumbnail, { categoryIcon } from "./Thumbnail";
@@ -125,6 +126,22 @@ export interface TreeHandlers {
   openProperties: (row: ProjectRow) => void;
   /** Locally-stored previews, keyed by project or task page id. */
   thumbs: Record<string, string>;
+
+  /* Arranging, marking and annotating a project. */
+
+  /**
+   * A row was dropped, or nudged with the menu arrows.
+   *
+   * `rows` is the section it lives in, in display order, because order is
+   * per-section on screen: dragging a project to the top of Orextic must not
+   * jump it above a project in another company's section that the person
+   * cannot even see from here.
+   */
+  moveProject: (row: ProjectRow, rows: ProjectRow[], toIndex: number) => void;
+  /** The colour mark, or "" to clear it. */
+  setHighlight: (row: ProjectRow, name: string) => void;
+  /** Opens the full panel: notes, every field, attachments, sub-tasks. */
+  openDetails: (row: ProjectRow) => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -147,6 +164,12 @@ function RowMenu({
   onProperties,
   onDelete,
   deleteLabel,
+  onDetails,
+  onMove,
+  canMoveUp,
+  canMoveDown,
+  highlight,
+  onHighlight,
 }: {
   label: string;
   onRename: () => void;
@@ -155,8 +178,19 @@ function RowMenu({
   onProperties?: () => void;
   onDelete: () => void;
   deleteLabel: string;
+  onDetails?: () => void;
+  /** -1 up, 1 down. Absent on task rows, which are ordered by their parent. */
+  onMove?: (direction: -1 | 1) => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  highlight?: string;
+  onHighlight?: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // The colours live behind one more click rather than as six items in the
+  // main list: a menu whose first six entries are colours buries Rename and
+  // Delete, which is what people actually came for.
+  const [colours, setColours] = useState(false);
 
   return (
     <div className="pt-menu-wrap">
@@ -172,7 +206,41 @@ function RowMenu({
         </svg>
       </button>
       {open && (
-        <Popover onClose={() => setOpen(false)}>
+        <Popover onClose={() => { setOpen(false); setColours(false); }}>
+          {colours ? (
+            <>
+              <button className="ed-opt back" onClick={() => setColours(false)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+                Highlight
+              </button>
+              {HIGHLIGHTS.map((h) => (
+                <button
+                  key={h.name}
+                  className={`ed-opt hl${highlight === h.name ? " on" : ""}`}
+                  onClick={() => { setOpen(false); setColours(false); onHighlight?.(h.name); }}
+                  title={h.hint}
+                >
+                  <span className={`hl-dot ${h.tone}`} aria-hidden />
+                  <span className="hl-name">{h.name}</span>
+                  <span className="hl-hint">{h.hint}</span>
+                </button>
+              ))}
+              <button
+                className="ed-opt"
+                onClick={() => { setOpen(false); setColours(false); onHighlight?.(""); }}
+                disabled={!highlight}
+              >
+                <span className="hl-dot none" aria-hidden />
+                <span className="hl-name">No highlight</span>
+              </button>
+            </>
+          ) : (
+          <>
+          {onDetails && (
+            <button className="ed-opt" onClick={() => { setOpen(false); onDetails(); }}>Open details &amp; notes</button>
+          )}
           <button className="ed-opt" onClick={() => { setOpen(false); onRename(); }}>Rename</button>
           {onAddSubtask && (
             <button className="ed-opt" onClick={() => { setOpen(false); onAddSubtask(); }}>Add sub-task</button>
@@ -183,7 +251,27 @@ function RowMenu({
           {onProperties && (
             <button className="ed-opt" onClick={() => { setOpen(false); onProperties(); }}>Properties…</button>
           )}
+          {onHighlight && (
+            <button className="ed-opt" onClick={() => setColours(true)}>
+              <span className={`hl-dot ${HIGHLIGHTS.find((h) => h.name === highlight)?.tone || "none"}`} aria-hidden />
+              {highlight ? `Highlight — ${highlight}` : "Highlight…"}
+            </button>
+          )}
+          {/* The keyboard- and touch-reliable half of reordering. Drag is the
+              fast path; these are the path that always works. */}
+          {onMove && (
+            <>
+              <button className="ed-opt" onClick={() => { setOpen(false); onMove(-1); }} disabled={!canMoveUp}>
+                Move up
+              </button>
+              <button className="ed-opt" onClick={() => { setOpen(false); onMove(1); }} disabled={!canMoveDown}>
+                Move down
+              </button>
+            </>
+          )}
           <button className="ed-opt danger" onClick={() => { setOpen(false); onDelete(); }}>{deleteLabel}</button>
+          </>
+          )}
         </Popover>
       )}
     </div>
@@ -202,6 +290,10 @@ function ProjectRowView({
   handlers,
   options,
   personal,
+  drag,
+  index,
+  total,
+  sectionRows,
 }: {
   row: ProjectRow;
   rowIndex: number;
@@ -210,6 +302,22 @@ function ProjectRowView({
   handlers: TreeHandlers;
   options: TreeOptions;
   personal: boolean;
+  /** Drag state, owned by the section so only one row can be lifted at once. */
+  drag: {
+    draggingId: string | null;
+    overId: string | null;
+    /** Which edge of the row the pointer is nearest — where it would land. */
+    edge: "above" | "below" | null;
+    onDragStart: (id: string) => void;
+    /** The pointer moved; work out which row it is over from the y position. */
+    onPointerMove: (clientY: number) => void;
+    onDrop: () => void;
+    onDragEnd: () => void;
+  };
+  index: number;
+  total: number;
+  /** The rows of this section, in display order — what the move maths acts on. */
+  sectionRows: ProjectRow[];
 }) {
   const { clientOptions, categoryOptions, teamOptions, statusOptions, priorityOptions, currency } = options;
   const p = row.project;
@@ -220,10 +328,58 @@ function ProjectRowView({
 
   return (
     <>
-      <tr className={`pt-row${expanded ? " open" : ""}${row.urgency === "late" ? " late" : ""}`}>
+      {/*
+        Pointer events, not the HTML5 drag-and-drop API.
+
+        HTML5 DnD does not fire on touch at all — every phone and tablet would
+        have had a feature that silently does nothing — and it cannot be
+        driven by a test, so "you can drag a project" would have stayed an
+        untested claim. Pointer events work on both and are drivable, at the
+        cost of tracking the gesture by hand, which is what dragMove below is.
+
+        data-highlight paints the row's spine. An attribute rather than a
+        class so the CSS reads as one rule per colour instead of six, and so
+        the value is legible in the DOM when something looks wrong.
+      */}
+      <tr
+        data-project-row={p.id}
+        className={
+          `pt-row${expanded ? " open" : ""}${row.urgency === "late" ? " late" : ""}` +
+          `${drag.draggingId === p.id ? " dragging" : ""}` +
+          `${drag.overId === p.id && drag.edge ? ` drop-${drag.edge}` : ""}`
+        }
+        data-highlight={p.highlight || undefined}
+      >
         {/* 0 — name */}
         <td className="pt-name-cell">
           <div className="pt-name">
+            {/* A grip rather than the whole row. Dragging from anywhere would
+                fight text selection in the name cell and the pickers in every
+                other one; Notion puts a handle here for the same reason. */}
+            <button
+              className="pt-grip"
+              type="button"
+              aria-label={`Reorder ${p.name}. Use the row menu's Move up and Move down for keyboard.`}
+              title="Drag to reorder"
+              onPointerDown={(e) => {
+                if (e.button !== 0 && e.pointerType === "mouse") return;
+                e.preventDefault();
+                (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                drag.onDragStart(p.id);
+              }}
+              onPointerMove={(e) => drag.onPointerMove(e.clientY)}
+              onPointerUp={(e) => {
+                (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+                drag.onDrop();
+              }}
+              onPointerCancel={drag.onDragEnd}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" />
+                <circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" />
+                <circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" />
+              </svg>
+            </button>
             <button
               className={`pt-caret${expanded ? " open" : ""}`}
               onClick={onToggle}
@@ -447,6 +603,12 @@ function ProjectRowView({
             }}
             onResources={() => handlers.openResources(row)}
             onProperties={options.custom.length ? () => handlers.openProperties(row) : undefined}
+            onDetails={() => handlers.openDetails(row)}
+            onMove={(direction) => handlers.moveProject(row, sectionRows, index + direction)}
+            canMoveUp={index > 0}
+            canMoveDown={index < total - 1}
+            highlight={p.highlight}
+            onHighlight={(name) => handlers.setHighlight(row, name)}
             onDelete={() => handlers.requestDelete(row)}
             deleteLabel="Delete project…"
           />
@@ -508,6 +670,71 @@ export default function ProjectTree({
   const { currency } = options;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  /**
+   * Which row is being dragged, and where it would land.
+   *
+   * One piece of state for the whole tree rather than one per section, and it
+   * carries the section key: a drag that started in Orextic must not show a
+   * drop line in the Personal section below it. Order is per-section on
+   * screen, so a cross-section drop has no meaning — it would move the row
+   * relative to projects the person cannot see from where they are standing.
+   */
+  const [drag, setDrag] = useState<{
+    sectionKey: string;
+    id: string;
+    overId: string | null;
+    edge: "above" | "below" | null;
+  } | null>(null);
+
+  const dragFor = (sectionKey: string, rows: ProjectRow[]) => ({
+    draggingId: drag?.sectionKey === sectionKey ? drag.id : null,
+    overId: drag?.sectionKey === sectionKey ? drag.overId : null,
+    edge: drag?.sectionKey === sectionKey ? drag.edge : null,
+    onDragStart: (id: string) => setDrag({ sectionKey, id, overId: null, edge: null }),
+    /**
+     * Which row the pointer is over, and which half of it.
+     *
+     * Measured from the rows' own boxes rather than from elementFromPoint:
+     * the grip has pointer capture for the whole gesture, so every event
+     * targets the grip and elementFromPoint would answer with it every time.
+     */
+    onPointerMove: (clientY: number) => {
+      setDrag((d) => {
+        if (!d || d.sectionKey !== sectionKey) return d;
+        let overId: string | null = null;
+        let edge: "above" | "below" | null = null;
+        for (const r of rows) {
+          const el = document.querySelector(`tr[data-project-row="${CSS.escape(r.project.id)}"]`);
+          if (!el) continue;
+          const box = el.getBoundingClientRect();
+          if (clientY >= box.top && clientY <= box.bottom) {
+            overId = r.project.id;
+            edge = clientY < box.top + box.height / 2 ? "above" : "below";
+            break;
+          }
+        }
+        if (overId === d.overId && edge === d.edge) return d;
+        return { ...d, overId, edge };
+      });
+    },
+    onDrop: () => {
+      if (!drag || drag.sectionKey !== sectionKey || !drag.overId || !drag.edge) return setDrag(null);
+      const moved = rows.find((r) => r.project.id === drag.id);
+      const targetIndex = rows.findIndex((r) => r.project.id === drag.overId);
+      if (!moved || targetIndex < 0) return setDrag(null);
+      // The index is expressed in the list WITHOUT the dragged row, which is
+      // what orderForMove() takes. Dropping below a target that sits after the
+      // dragged row is already correct once the row is removed; dropping below
+      // one that sits before it needs the +1.
+      const from = rows.findIndex((r) => r.project.id === drag.id);
+      let to = targetIndex + (drag.edge === "below" ? 1 : 0);
+      if (from < targetIndex + (drag.edge === "below" ? 1 : 0)) to -= 1;
+      handlers.moveProject(moved, rows, to);
+      setDrag(null);
+    },
+    onDragEnd: () => setDrag(null),
+  });
 
   if (sections.length === 0) {
     return (
@@ -619,13 +846,17 @@ export default function ProjectTree({
 </tr>
                   </thead>
                   <tbody>
-                    {section.rows.map((row) => {
+                    {section.rows.map((row, i) => {
                       const rowIndex = rowCursor++;
                       return (
                         <ProjectRowView
                           key={row.project.id}
                           row={row}
                           rowIndex={rowIndex}
+                          index={i}
+                          total={section.rows.length}
+                          sectionRows={section.rows}
+                          drag={dragFor(section.key, section.rows)}
                           expanded={expanded.has(row.project.id)}
                           onToggle={() =>
                             setExpanded((prev) => {

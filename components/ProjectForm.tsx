@@ -102,6 +102,12 @@ function FormBody({
       ? [currentClient, ...clientChoices]
       : clientChoices;
 
+  // Options added while this dialog is open. The server round trip returns the
+  // full list, but the `categories` prop came from a server render that has
+  // not happened again yet — without this the category you just created
+  // disappears from the rail the moment it is created.
+  const [extraCategories, setExtraCategories] = useState<string[]>([]);
+
   function toggleAssignee(id: string) {
     setState({
       ...state,
@@ -112,7 +118,8 @@ function FormBody({
   }
 
   return (
-    <>
+    <div className="pf-grid">
+      <div className="pf-main">
       <div className="form-field">
         <label>Name</label>
         <input value={state.name} onChange={(e) => setState({ ...state, name: e.target.value })} autoFocus />
@@ -132,9 +139,12 @@ function FormBody({
             value={state.companyId}
             onChange={(e) => {
               const picked = e.target.value;
-              // Self-directed work is defined by having no client — the same
+              // Self-directed work is work filed under NO company — the same
               // rule the Projects screen groups on — so choosing it clears
-              // the client rather than setting a flag that could disagree.
+              // both fields rather than setting a flag that could disagree.
+              // (It used to be "no client", which meant picking a company here
+              // changed nothing on the Projects screen: every internal company
+              // project still landed under Personal.)
               if (picked === PERSONAL) {
                 setState({ ...state, companyId: "", clientId: "" });
                 return;
@@ -146,11 +156,13 @@ function FormBody({
               setState({ ...state, companyId: picked, clientId });
             }}
           >
-            <option value="">—</option>
+            {/* One way to say "no company", not two. A bare "—" alongside
+                "Personal / internal R&D" offered the same outcome twice and
+                made the second look like something else. */}
+            <option value={PERSONAL}>Personal / internal R&amp;D</option>
             {companies.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
-            <option value={PERSONAL}>Personal / internal R&amp;D</option>
           </select>
         </div>
         <div className="form-field">
@@ -206,30 +218,6 @@ function FormBody({
           </div>
         </div>
       )}
-      <div className="form-field">
-        <label>Category</label>
-        <div className="form-chips">
-          {categories.map((c) => (
-            <button
-              key={c}
-              type="button"
-              className={`form-chip${state.category.includes(c) ? " on" : ""}`}
-              onClick={() =>
-                setState({
-                  ...state,
-                  category: state.category.includes(c)
-                    ? state.category.filter((x) => x !== c)
-                    : [...state.category, c],
-                })
-              }
-              aria-pressed={state.category.includes(c)}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {onTasksChange && (
         <div className="form-field">
           <label>First milestones</label>
@@ -314,7 +302,138 @@ function FormBody({
           onChange={(e) => setState({ ...state, estimatedRenderHours: e.target.value })}
         />
       </div>
-    </>
+      </div>
+
+      <aside className="pf-rail">
+        <CategoryRail
+          categories={extraCategories.length ? [...categories, ...extraCategories] : categories}
+          chosen={state.category}
+          onToggle={(c) =>
+            setState({
+              ...state,
+              category: state.category.includes(c)
+                ? state.category.filter((x) => x !== c)
+                : [...state.category, c],
+            })
+          }
+          onAdded={(name, all) => {
+            // Tick it as well as adding it. Someone who just typed a category
+            // name into a project form means this project to have it.
+            setExtraCategories(all.filter((o) => !categories.includes(o)));
+            setState({ ...state, category: [...state.category, name] });
+          }}
+        />
+      </aside>
+    </div>
+  );
+}
+
+/**
+ * Categories, down the side, with a way to add one.
+ *
+ * A rail rather than a row of chips buried between Status and Milestones.
+ * Category is the field that decides how a project is found again six months
+ * later, and it was getting the same three lines of the dialog as "Estimated
+ * render time". Down the side it is visible while the rest of the form is
+ * filled in, and it has room to grow — which it needs, because a vocabulary
+ * you can add to is a vocabulary that grows.
+ *
+ * A new category is written into the Notion multi-select's options, not just
+ * onto this project. Otherwise the second project to use it would have to
+ * type it again, exactly, and one typo makes two categories that look the
+ * same and filter differently.
+ */
+function CategoryRail({
+  categories,
+  chosen,
+  onToggle,
+  onAdded,
+}: {
+  categories: string[];
+  chosen: string[];
+  onToggle: (name: string) => void;
+  onAdded: (name: string, all: string[]) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function add() {
+    const clean = name.trim();
+    if (!clean || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/projects/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: clean }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Couldn't add that category");
+      onAdded(clean, data.options || [...categories, clean]);
+      setName("");
+      setAdding(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't add that category");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="pf-rail-block">
+      <label className="pf-rail-label">Category</label>
+      <div className="pf-cats">
+        {categories.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className={`pf-cat${chosen.includes(c) ? " on" : ""}`}
+            onClick={() => onToggle(c)}
+            aria-pressed={chosen.includes(c)}
+          >
+            <span className="pf-cat-box" aria-hidden />
+            <span className="pf-cat-name">{c}</span>
+          </button>
+        ))}
+        {!categories.length && <p className="pf-rail-empty">No categories in your Notion database yet.</p>}
+      </div>
+
+      {adding ? (
+        <div className="pf-cat-add">
+          <input
+            value={name}
+            autoFocus
+            placeholder="New category"
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter here must not submit the project form — the person is
+              // naming a category, not saying the project is finished.
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add();
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setAdding(false);
+                setError(null);
+              }
+            }}
+          />
+          <button type="button" className="btn-save" onClick={add} disabled={busy || !name.trim()}>
+            {busy ? "…" : "Add"}
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="pf-cat-new" onClick={() => setAdding(true)}>
+          + New category
+        </button>
+      )}
+      {error && <p className="pf-rail-error">{error}</p>}
+      <p className="pf-rail-hint">Added to your Notion database, so it is there next time too.</p>
+    </div>
   );
 }
 
@@ -433,7 +552,7 @@ export function NewProjectButton({
       )}
       {open && (
         <div className="modal-overlay" onClick={() => setOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal pf-modal" onClick={(e) => e.stopPropagation()}>
             <h2>New Project</h2>
             <div className="modal-sub">Writes straight to your Notion Projects database</div>
             <form onSubmit={submit}>
@@ -489,7 +608,7 @@ export function EditProjectButton({
       <button className="link-btn" onClick={() => setOpen(true)} type="button">Edit</button>
       {open && (
         <div className="modal-overlay" onClick={() => setOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal pf-modal" onClick={(e) => e.stopPropagation()}>
             <h2>Edit {project.name}</h2>
             <div className="modal-sub">Updates the page directly in Notion</div>
             <form onSubmit={submit}>

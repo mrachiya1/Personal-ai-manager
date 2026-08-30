@@ -5,6 +5,7 @@
 // Every figure here is derived from a record; nothing is estimated.
 
 import type { ClientRecord, Company, Payment, Project, Task, TeamMember } from "./types";
+import { sortProjects } from "./projectOrder";
 import { buildTaskTree, type TaskTree } from "./taskTree";
 
 /* ================================================================== */
@@ -82,7 +83,11 @@ export function buildRows(input: {
   const companyById = new Map(input.companies.map((c) => [c.id, c]));
   const memberById = new Map(input.team.map((m) => [m.id, m]));
 
-  return input.projects.map((project) => {
+  // The hand-arranged order, applied once here so every downstream view —
+  // the table, the board, the folders — shows the same sequence. Sorting in
+  // each view instead is how two of them end up disagreeing about where a
+  // project sits.
+  return sortProjects(input.projects).map((project) => {
     const tasks = input.tasks.filter((t) => t.projectId === project.id);
     const tree = buildTaskTree(tasks);
 
@@ -137,32 +142,44 @@ export interface ProjectSection {
 }
 
 /**
- * Client work, split by company; then everything self-directed.
+ * Work filed under a company, split by company; then everything else.
  *
- * The dividing line is whether a client is attached, not a flag someone has
- * to remember to set. That is the same line the billing fields fall on — a
- * project with no client has no invoice, no payment status and no account to
- * keep warm — so the table can simply hide those columns for the personal
- * section rather than showing a row of dashes.
+ * THE COMPANY is the dividing line, not the client. It used to be the client,
+ * on the reasoning that a project with no client has no invoice and no
+ * payment status — true, and irrelevant to where the project belongs. An
+ * operator running their own studios does a great deal of company work with
+ * no external client at all: a showreel, a site rebuild, a pitch. Filing all
+ * of it as "Personal project · internal R&D" put every one of this
+ * workspace's projects in the one section it did not belong in, and made the
+ * company selector on the form look broken, because setting it changed
+ * nothing on screen.
+ *
+ * Personal now means what it says: no company AND no client. Self-directed.
  */
 export function sectionise(rows: ProjectRow[], companies: Company[]): ProjectSection[] {
-  const client = rows.filter((r) => r.client);
-  const personal = rows.filter((r) => !r.client);
+  const filed = rows.filter((r) => r.project.companyId || r.client);
+  const personal = rows.filter((r) => !r.project.companyId && !r.client);
 
   const sections: ProjectSection[] = companies
     .map((company) => {
-      const mine = client.filter((r) => r.project.companyId === company.id);
+      const mine = filed.filter((r) => r.project.companyId === company.id);
+      const clientCount = new Set(mine.filter((r) => r.client).map((r) => r.client!.id)).size;
+      const internal = mine.filter((r) => !r.client).length;
+      // The subtitle describes what is actually in the section rather than
+      // assuming every company project is billable. "3 projects · 2 clients ·
+      // 1 internal" is the truth for a studio that ships its own work too.
+      const parts = [`${mine.length} ${mine.length === 1 ? "project" : "projects"}`];
+      if (clientCount) parts.push(`${clientCount} ${clientCount === 1 ? "client" : "clients"}`);
+      if (internal) parts.push(`${internal} internal`);
       return {
         key: `company:${company.id}`,
         // Two lines rather than one prefixed string: the kind of work is the
         // eyebrow and the company is the title, so a run of company sections
         // reads as a list of companies instead of a list of sentences that all
         // start with the same two words.
-        eyebrow: "Client project",
+        eyebrow: clientCount ? "Client project" : "Company project",
         title: `Company ${company.name}`,
-        subtitle: `${mine.length} client ${mine.length === 1 ? "project" : "projects"} · ${
-          new Set(mine.map((r) => r.client!.id)).size
-        } ${new Set(mine.map((r) => r.client!.id)).size === 1 ? "client" : "clients"}`,
+        subtitle: parts.join(" · "),
         kind: "client" as const,
         colorVar: company.colorVar,
         rows: mine,
@@ -172,7 +189,7 @@ export function sectionise(rows: ProjectRow[], companies: Company[]): ProjectSec
 
   // Client work whose company was deleted or never set still has to appear
   // somewhere, or the section counts won't add up to the headline count.
-  const orphans = client.filter((r) => !companies.some((c) => c.id === r.project.companyId));
+  const orphans = filed.filter((r) => !companies.some((c) => c.id === r.project.companyId));
   if (orphans.length) {
     sections.push({
       key: "company:none",
@@ -188,7 +205,7 @@ export function sectionise(rows: ProjectRow[], companies: Company[]): ProjectSec
     sections.push({
       key: "personal",
       title: "Personal project",
-      subtitle: `${personal.length} self-directed ${personal.length === 1 ? "project" : "projects"} · internal R&D, no client or invoice`,
+      subtitle: `${personal.length} self-directed ${personal.length === 1 ? "project" : "projects"} · no company, no client`,
       kind: "personal",
       rows: personal,
     });
@@ -231,11 +248,18 @@ export interface ProjectsMetrics {
 
 const PERSONAL_KEY = "personal";
 
+/**
+ * Which entity a project's value belongs to, for the donut and the splits.
+ *
+ * The company first, exactly as sectionise() files it. Keying off the client
+ * instead put every internal company project into "Personal R&D", which is
+ * how a workspace with three studios and five company projects showed a donut
+ * reading "Personal R&D 5 · 100%".
+ */
 function entityOf(row: ProjectRow): { key: string; label: string } {
-  if (!row.client) return { key: PERSONAL_KEY, label: "Personal R&D" };
-  return row.company
-    ? { key: row.company.id, label: row.company.name }
-    : { key: "unfiled", label: "No company" };
+  if (row.company) return { key: row.company.id, label: row.company.name };
+  if (row.client) return { key: "unfiled", label: "No company" };
+  return { key: PERSONAL_KEY, label: "Personal R&D" };
 }
 
 function splitBy(rows: ProjectRow[], measure: (r: ProjectRow) => number): EntitySlice[] {

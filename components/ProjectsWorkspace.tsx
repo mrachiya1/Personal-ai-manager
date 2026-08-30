@@ -14,7 +14,9 @@ import CompletionFeedback from "@/components/projects/CompletionFeedback";
 import ConfirmDelete from "@/components/projects/ConfirmDelete";
 import ResourcesModal from "@/components/projects/ResourcesModal";
 import PropertiesModal from "@/components/projects/PropertiesModal";
+import DetailsPanel from "@/components/projects/DetailsPanel";
 import { buildRows, computeMetrics, sectionise, type ProjectRow } from "@/lib/projectsAnalytics";
+import { planMove } from "@/lib/projectOrder";
 import type { PickOption } from "@/components/projects/editable";
 
 type Tab = "projects" | "board" | "folders";
@@ -72,6 +74,7 @@ export default function ProjectsWorkspace({
    */
   const [renameKey, setRenameKey] = useState<string | null>(null);
   const [addUnder, setAddUnder] = useState<{ projectId: string; parentTaskId?: string } | null>(null);
+  const [detailsFor, setDetailsFor] = useState<ProjectRow | null>(null);
   const [propertiesFor, setPropertiesFor] = useState<ProjectRow | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -413,6 +416,61 @@ export default function ProjectsWorkspace({
     [rows, taskRows, router]
   );
 
+  /**
+   * Moving a project, from a drag or from the menu arrows.
+   *
+   * Both routes end here so the two cannot disagree about what "down one"
+   * means. The write is a single PATCH of one number — see lib/projectOrder.ts
+   * for why it is a midpoint rather than a renumber — and it is optimistic,
+   * because a list that only reorders itself after a Notion round trip feels
+   * broken even when it works.
+   */
+  const moveProject = useCallback(
+    async (row: ProjectRow, sectionRows: ProjectRow[], toIndex: number) => {
+      const orderables = sectionRows.map((r) => ({ id: r.project.id, order: r.project.order }));
+      const plan = planMove(orderables, row.project.id, toIndex);
+      if (!plan.length) return; // dropped where it already was
+
+      const before = rows;
+      const byId = new Map(plan.map((w) => [w.id, w.order]));
+      setRows((prev) => prev.map((p) => (byId.has(p.id) ? { ...p, order: byId.get(p.id)! } : p)));
+      try {
+        // Usually one write. It is more when the move cannot be expressed as a
+        // single number — see planMove() — and then they go in sequence rather
+        // than in parallel, because Notion rate-limits per integration and a
+        // burst of parallel PATCHes is the reliable way to get a 429 in the
+        // middle of a reorder.
+        for (const write of plan) {
+          const res = await fetch(`/api/projects/${write.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order: write.order }),
+          });
+          if (!res.ok) {
+            const message = (await res.json().catch(() => ({}))).error || "Notion refused the move";
+            throw new Error(
+              /Order/i.test(message) ? `${message} — open Settings and run the Projects schema check.` : message
+            );
+          }
+        }
+        router.refresh();
+      } catch (err) {
+        setRows(before);
+        setToast({ text: err instanceof Error ? err.message : "Couldn't move that", err: true });
+        setTimeout(() => setToast(null), 3500);
+      }
+    },
+    [rows, router]
+  );
+
+  /** The colour mark. Same optimistic contract as every other cell edit. */
+  const setHighlight = useCallback(
+    (row: ProjectRow, name: string) => {
+      patch(row.project.id, { highlight: name || undefined }, { highlight: name });
+    },
+    [patch]
+  );
+
   const handlers: TreeHandlers = useMemo(
     () => ({
       patch,
@@ -426,13 +484,16 @@ export default function ProjectsWorkspace({
       renameKey,
       clearRename: () => setRenameKey(null),
       startRename: setRenameKey,
+      moveProject,
+      setHighlight,
+      openDetails: setDetailsFor,
       addUnder,
       clearAdd: () => setAddUnder(null),
       startAdd: (projectId: string, parentTaskId?: string) => setAddUnder({ projectId, parentTaskId }),
       openProperties: setPropertiesFor,
       requestDelete: setDeleteFor,
     }),
-    [patch, toggleTask, patchTask, requestCompletion, addTask, removeTask, thumbs, renameKey, addUnder]
+    [patch, toggleTask, patchTask, requestCompletion, addTask, removeTask, thumbs, renameKey, addUnder, moveProject, setHighlight]
   );
 
   return (
@@ -558,6 +619,37 @@ export default function ProjectsWorkspace({
           fileCount={deleteFor.project.files.length}
           onCancel={() => setDeleteFor(null)}
           onConfirm={() => removeProject(deleteFor)}
+        />
+      )}
+
+      {detailsFor && (
+        <DetailsPanel
+          // Re-read from live rows so the panel shows the highlight the user
+          // just set, rather than the snapshot captured when it opened.
+          row={sections.flatMap((sec) => sec.rows).find((r) => r.project.id === detailsFor.project.id) ?? detailsFor}
+          currency={currency}
+          onSaveNotes={async (notes) => {
+            const id = detailsFor.project.id;
+            setRows((prev) => prev.map((p) => (p.id === id ? { ...p, notes } : p)));
+            const res = await fetch(`/api/projects/${id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ notes }),
+            });
+            if (!res.ok) {
+              const message = (await res.json().catch(() => ({}))).error || "Notion refused the note";
+              throw new Error(
+                /Notes/i.test(message) ? `${message} — run the Projects schema check in Settings.` : message
+              );
+            }
+            router.refresh();
+          }}
+          onHighlight={(name) => setHighlight(detailsFor, name)}
+          onOpenResources={() => {
+            setResourcesFor(detailsFor);
+            setDetailsFor(null);
+          }}
+          onClose={() => setDetailsFor(null)}
         />
       )}
 

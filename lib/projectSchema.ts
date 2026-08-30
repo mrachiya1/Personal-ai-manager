@@ -26,6 +26,34 @@ export interface RequiredProp {
   purpose: string;
 }
 
+/* ------------------------------------------------------------------ */
+/* Highlight colours                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The colours a project row can be marked with.
+ *
+ * Each one carries a WORD as well as a colour, and the word is the Notion
+ * select option — "Red" alone would be meaningless in Notion and meaningless
+ * to anyone colourblind. Six is deliberate: past that nobody remembers what
+ * their own scheme meant, and the palette stops being a signal.
+ *
+ * The tints are drawn from the status tokens the rest of the app already
+ * uses, so a highlighted row reads as part of the same system rather than as
+ * something painted on top of it.
+ */
+export const HIGHLIGHTS = [
+  { name: "Urgent", tone: "critical", hint: "Needs attention before anything else" },
+  { name: "Watch", tone: "warning", hint: "Something could go wrong here" },
+  { name: "Winning", tone: "good", hint: "Going well — worth protecting" },
+  { name: "Waiting", tone: "blue", hint: "Blocked on someone else" },
+  { name: "Idea", tone: "violet", hint: "Speculative, not committed" },
+  { name: "Personal", tone: "neutral", hint: "Yours, not the studio's" },
+] as const;
+
+export type HighlightName = (typeof HIGHLIGHTS)[number]["name"];
+export const HIGHLIGHT_NAMES: string[] = HIGHLIGHTS.map((h) => h.name);
+
 export const REQUIRED_PROJECT_PROPS: RequiredProp[] = [
   { name: "Client", kind: "relation", relatesTo: "clients", purpose: "Links a project directly to a client, instead of inferring it through Payments" },
   { name: "Assigned To", kind: "relation", relatesTo: "team", purpose: "Who is working on it — drives the people column" },
@@ -44,6 +72,18 @@ export const REQUIRED_PROJECT_PROPS: RequiredProp[] = [
   },
   { name: "Completion Note", kind: "rich_text", purpose: "What made it feel that way, in your own words" },
   { name: "Completed On", kind: "date", purpose: "When it was marked done, so feel can be plotted against workload" },
+  {
+    name: "Order",
+    kind: "number",
+    purpose: "Where the project sits when you arrange the list by hand — dragging a row writes this",
+  },
+  {
+    name: "Highlight",
+    kind: "select",
+    options: HIGHLIGHT_NAMES,
+    purpose: "A colour you can mark a project with to flag it as special, and what that colour means",
+  },
+  { name: "Notes", kind: "rich_text", purpose: "Your own running notes on the project, kept with it rather than in a separate app" },
 ];
 
 /** The Notion property-schema body for one required property. */

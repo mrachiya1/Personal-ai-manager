@@ -36,7 +36,8 @@ const page = (id, props, edited = -1) => ({
 const co = { orex: "co-orex", studio: "co-studio", labs: "co-labs" };
 const cl = { north: "cl-north", lumen: "cl-lumen", vero: "cl-vero", atlas: "cl-atlas" };
 const tm = { dinesh: "tm-dinesh", aisha: "tm-aisha", marco: "tm-marco", nadia: "tm-nadia", sam: "tm-sam" };
-const pr = { film: "pr-film", pack: "pr-pack", explain: "pr-explain", onboard: "pr-onboard", reel: "pr-reel", vero: "pr-vero", atlas: "pr-atlas" };
+const pr = {
+  solo: "00000000000000000000000000000090", film: "pr-film", pack: "pr-pack", explain: "pr-explain", onboard: "pr-onboard", reel: "pr-reel", vero: "pr-vero", atlas: "pr-atlas" };
 const ac = { bank: "ac-bank", wise: "ac-wise", cash: "ac-cash" };
 
 const F = {
@@ -65,6 +66,11 @@ const F = {
     page(pr.onboard, { Name: T("Lumen — Onboarding Loop"), Company: L([co.orex]), Client: L([cl.lumen]), Category: M(["Motion"]), Status: S("Idea"), Description: R(""), Deadline: D(day(37)), "Render Priority": S("Low"), "Assigned To": L([]), Value: N(40000), Headline: R(""), "Client Requests": R(""), "Reviewed By": L([]) }, -12),
     page(pr.reel, { Name: T("Studio Reel 2026"), Company: L([co.studio]), Client: L([]), Category: M(["3D", "Motion", "Web"]), Status: S("Production"), Description: R("Annual showreel, internal."), Deadline: D(day(4)), "Render Priority": S("Medium"), "Estimated Render Time (hrs)": N(30), "Assigned To": L([tm.dinesh, tm.aisha, tm.marco, tm.nadia]), "Start Date": D(day(-16)), Value: N(0), Headline: R("Internal — annual showreel"), "Client Requests": R(""), "Reviewed By": L([]) }, -2),
     page(pr.vero, { Name: T("Vero — Fleet Dashboard Motion Kit"), Company: L([co.orex]), Client: L([cl.vero]), Category: M(["Motion"]), Status: S("Delivered"), Description: R("Twelve UI motion components."), Deadline: D(day(-40)), "Render Priority": S("Low"), "Assigned To": L([tm.aisha]), "Start Date": D(day(-95)), Value: N(210000), Headline: R("Twelve UI motion components, delivered"), "Last Reviewed": D(day(-38)), "Reviewed By": L([tm.marco]) }, -38),
+    /* No company AND no client — the only thing that is actually personal.
+       Every other project here belongs to a company, which is what the
+       sections used to get wrong: filing them all as "Personal · internal
+       R&D" because none of them had a client attached. */
+    page(pr.solo, { Name: T("Learning Houdini — personal"), Company: L([]), Client: L([]), Category: M(["3D"]), Status: S("Planning"), Description: R("Self-directed, no client, no company."), Deadline: D(day(30)), "Render Priority": S("Low"), "Assigned To": L([]), "Start Date": D(day(-3)), Value: N(0), Headline: R("Evenings and weekends"), "Client Requests": R(""), "Reviewed By": L([]) }, -3),
     page(pr.atlas, { Name: T("Atlas Foods — Pitch Concept"), Company: L([co.studio]), Client: L([cl.atlas]), Category: M(["3D"]), Status: S("Idea"), Description: R("Speculative concept for the pitch."), Deadline: D(day(11)), "Render Priority": S("High"), "Assigned To": L([tm.dinesh]), "Start Date": D(day(-1)), Value: N(0), Headline: R("Speculative — pitch is on the 12th"), "Client Requests": R("Asked to see two directions, not one."), "Reviewed By": L([]) }, -0.3),
   ],
   tasks: [

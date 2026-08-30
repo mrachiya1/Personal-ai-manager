@@ -1577,9 +1577,18 @@ table.dt.pw-table .avatar-stack .av{ width:21px; height:21px; }
 }
 .ts-item.on{ background:var(--critical-bg); }
 .ts-name{ font-size:11px; font-weight:650; letter-spacing:0.04em; text-transform:uppercase; color:var(--ink-muted); }
-.ts-item.on .ts-name{ color:var(--critical); }
+/* --critical is a MARK colour, tuned to be distinguishable as a dot or a
+   border. As 11px uppercase text on the tint it belongs to it measures
+   4.26:1 dark and 4.44:1 light — both under AA, both only visible while a
+   window is actually running, which is why it went unnoticed. --critical-ink
+   is the same role sized for text on that tint. */
+.ts-item.on .ts-name{ color:var(--critical-ink); }
 .ts-time{ font-size:13.5px; font-weight:600; font-variant-numeric:tabular-nums; color:var(--ink); white-space:nowrap; }
 .ts-why{ font-size:11px; line-height:1.5; color:var(--ink-muted); }
+/* --ink-muted is tuned for the app's surfaces, not for a status tint: on the
+   critical background it lands at 3.22:1. The active row gets the secondary
+   ink, which clears AA on it. */
+.ts-item.on .ts-why{ color:var(--ink-secondary); }
 
 /* ---------- six metric cards ---------- */
 .metric-grid{
@@ -3234,4 +3243,220 @@ html[data-theme="dark"] .pt-section .pt-res-link:hover{ color:#7dd3fc; }
 @media (max-width: 620px){
   .wo-times label{ flex:1 1 45%; }
   .wo-actions .btn-save, .wo-actions .btn-discard{ flex:1 1 45%; min-height:40px; }
+}
+
+/* ==================================================================
+   Highlights, dragging, and the project details panel
+   ================================================================== */
+
+/* ---------- the colour mark on a row ---------- */
+/*
+   A spine down the left edge and the faintest tint, not a filled row. Six
+   saturated backgrounds in one table is a hazard sign, not a highlight — and
+   the row still has to read as a row of data with a status badge on it. The
+   tone names come from HIGHLIGHTS in lib/projectSchema.ts, so a colour and
+   its meaning cannot drift apart.
+*/
+.pt-row[data-highlight] > td:first-child{ position:relative; }
+.pt-row[data-highlight] > td:first-child::before{
+  content:""; position:absolute; left:0; top:5px; bottom:5px; width:3px;
+  border-radius:0 3px 3px 0; background:var(--hl, var(--ink-muted));
+}
+.pt-row[data-highlight] > td{ background:color-mix(in oklab, var(--hl, transparent) 6%, transparent); }
+.pt-row[data-highlight="Urgent"]{ --hl:var(--critical); }
+.pt-row[data-highlight="Watch"]{ --hl:var(--warning); }
+.pt-row[data-highlight="Winning"]{ --hl:var(--good); }
+.pt-row[data-highlight="Waiting"]{ --hl:var(--blue); }
+.pt-row[data-highlight="Idea"]{ --hl:var(--violet-ink); }
+.pt-row[data-highlight="Personal"]{ --hl:var(--ink-muted); }
+
+/* The dot used in the menu and on the chips. */
+.hl-dot{
+  width:10px; height:10px; border-radius:50%; flex-shrink:0;
+  background:var(--dot, var(--ink-muted)); box-shadow:inset 0 0 0 1px rgba(0,0,0,0.12);
+}
+.hl-dot.critical{ --dot:var(--critical); }
+.hl-dot.warning{ --dot:var(--warning); }
+.hl-dot.good{ --dot:var(--good); }
+.hl-dot.blue{ --dot:var(--blue); }
+.hl-dot.violet{ --dot:var(--violet-ink); }
+.hl-dot.neutral{ --dot:var(--ink-muted); }
+.hl-dot.none{ --dot:transparent; box-shadow:inset 0 0 0 1px var(--control-edge); }
+
+.ed-opt.hl{ display:flex; align-items:center; gap:9px; }
+.ed-opt.hl .hl-name{ font-weight:600; }
+.ed-opt.hl .hl-hint{
+  margin-left:auto; font-size:10.5px; color:var(--ink-muted);
+  max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.ed-opt.hl.on{ background:var(--field); }
+.ed-opt.back{ display:flex; align-items:center; gap:7px; font-weight:650; color:var(--ink-muted); }
+.ed-opt.back svg{ width:13px; height:13px; }
+
+/* ---------- dragging a row ---------- */
+/*
+   The dragged row fades; the drop line is drawn on the row it would land
+   against. A 2px line on an existing border is the whole affordance — a
+   shifting placeholder row makes a twelve-row table jump under the pointer
+   and is much harder to aim at.
+*/
+.pt-grip{
+  width:18px; height:24px; flex-shrink:0; position:relative;
+  display:grid; place-items:center; padding:0; border:none; background:none;
+  color:var(--ink-muted); opacity:0.35; cursor:grab; touch-action:none;
+  transition:opacity .12s, color .12s;
+}
+/* 18x24 to look at, 36x40 to grab. Same rule as every other small control. */
+.pt-grip::after{ content:""; position:absolute; inset:-8px -9px; }
+.pt-grip svg{ width:14px; height:14px; }
+.pt-row:hover .pt-grip, .pt-row:focus-within .pt-grip, .pt-grip:focus-visible{ opacity:1; }
+.pt-grip:hover{ color:var(--ink); }
+.pt-grip:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
+.pt-grip:active{ cursor:grabbing; }
+/* No hover to reveal it with, and a finger needs the full target. */
+@media (hover: none){ .pt-grip{ opacity:1; width:24px; height:28px; } }
+
+.pt-row.dragging > td{ background:var(--field); opacity:0.55; }
+.pt-row.drop-above > td{ box-shadow:inset 0 2px 0 0 var(--blue); }
+.pt-row.drop-below > td{ box-shadow:inset 0 -2px 0 0 var(--blue); }
+
+/* ---------- the details panel ---------- */
+.modal.dp-modal{ max-width:660px; width:100%; display:flex; flex-direction:column; max-height:88vh; }
+.dp-head h2{ margin:0; font-size:17px; letter-spacing:-0.015em; }
+.dp-body{ overflow-y:auto; padding:4px 2px 2px; display:grid; gap:18px; }
+.dp-label{
+  display:block; font-size:10.5px; font-weight:650; letter-spacing:0.06em;
+  text-transform:uppercase; color:var(--ink-muted); margin-bottom:7px;
+}
+.dp-notes-head{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:7px; }
+.dp-notes-head label{
+  font-size:10.5px; font-weight:650; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-muted);
+}
+.dp-save{ font-size:11px; color:var(--ink-muted); }
+.dp-save.saved{ color:var(--good-ink); }
+.dp-save.error{ color:var(--critical-ink); }
+.dp-notes-field{
+  width:100%; font:inherit; font-size:13px; line-height:1.65; color:var(--ink);
+  background:var(--field); border:1px solid var(--border-strong); border-radius:var(--radius-sm);
+  padding:11px 13px; resize:vertical; min-height:120px;
+}
+.dp-notes-field:focus{ outline:2px solid var(--blue); outline-offset:1px; }
+.dp-notes-field::placeholder{ color:var(--ink-muted); }
+
+.dp-chips{ display:flex; flex-wrap:wrap; gap:7px; }
+.dp-chip{
+  display:inline-flex; align-items:center; gap:7px; min-height:32px;
+  font:inherit; font-size:12px; font-weight:600; color:var(--ink-secondary);
+  padding:6px 12px; border-radius:999px; cursor:pointer;
+  border:1px solid var(--border-strong); background:var(--surface);
+}
+.dp-chip:hover{ color:var(--ink); background:var(--field); }
+.dp-chip:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
+.dp-chip.on{ border-color:var(--hl, var(--ink-muted)); background:color-mix(in oklab, var(--hl, transparent) 10%, var(--surface)); color:var(--ink); }
+.dp-chip.critical{ --hl:var(--critical); }
+.dp-chip.warning{ --hl:var(--warning); }
+.dp-chip.good{ --hl:var(--good); }
+.dp-chip.blue{ --hl:var(--blue); }
+.dp-chip.violet{ --hl:var(--violet-ink); }
+.dp-chip.neutral{ --hl:var(--ink-muted); }
+.dp-chip .hl-dot{ background:var(--hl, var(--ink-muted)); }
+.dp-hint{ margin:8px 0 0 0; font-size:11.5px; color:var(--ink-muted); }
+
+.dp-facts dl{ margin:0; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:9px 18px; }
+.dp-fact{ min-width:0; }
+.dp-fact dt{ font-size:10.5px; font-weight:650; letter-spacing:0.04em; text-transform:uppercase; color:var(--ink-muted); }
+.dp-fact dd{ margin:2px 0 0 0; font-size:12.5px; color:var(--ink); overflow-wrap:anywhere; }
+
+.dp-block p{ margin:0; font-size:12.5px; line-height:1.65; color:var(--ink-secondary); }
+.dp-empty{ font-size:12.5px; color:var(--ink-muted); }
+.dp-tasks{ list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+.dp-tasks li{ display:flex; align-items:baseline; gap:10px; font-size:12.5px; min-width:0; }
+.dp-tasks li.done .dp-task-title{ color:var(--ink-muted); text-decoration:line-through; }
+.dp-task-title{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dp-task-count{ font-size:11px; color:var(--ink-muted); font-variant-numeric:tabular-nums; flex-shrink:0; }
+.dp-task-status{ margin-left:auto; font-size:11px; color:var(--ink-muted); flex-shrink:0; }
+.dp-more{ font-size:11.5px; color:var(--ink-muted); }
+
+.dp-foot{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding-top:13px; margin-top:4px; border-top:1px solid var(--border);
+}
+
+@media (max-width: 620px){
+  .dp-facts dl{ grid-template-columns:1fr; }
+  .dp-foot .btn-save, .dp-foot .btn-discard{ flex:1 1 45%; min-height:40px; }
+  /* The grip works on touch — it is pointer-driven, not HTML5 drag — so it
+     stays. The row menu's arrows remain the keyboard path. */
+}
+
+/* ==================================================================
+   The project dialog: two columns, with categories down the side
+   ==================================================================
+   Category decides how a project is found again six months later, and it was
+   getting the same three lines as "Estimated render time" — buried between
+   Status and Milestones in a single scrolling column. On the side it stays
+   visible while the rest is filled in, and it has room to grow, which it
+   needs now that the list can be added to.
+*/
+.modal.pf-modal{ max-width:880px; width:100%; }
+.pf-grid{ display:grid; grid-template-columns:minmax(0, 1fr) 232px; gap:22px; align-items:start; }
+.pf-main{ min-width:0; display:grid; gap:14px; }
+.pf-main > .form-field, .pf-main > .form-row{ margin:0; }
+.pf-rail{
+  min-width:0; position:sticky; top:0;
+  border-left:1px solid var(--border); padding-left:20px;
+}
+.pf-rail-block{ display:grid; gap:9px; }
+.pf-rail-label{
+  font-size:10.5px; font-weight:650; letter-spacing:0.06em;
+  text-transform:uppercase; color:var(--ink-muted);
+}
+.pf-cats{ display:grid; gap:2px; max-height:270px; overflow-y:auto; margin:0 -6px; padding:0 6px; }
+.pf-cat{
+  display:flex; align-items:center; gap:9px; width:100%; min-height:34px;
+  font:inherit; font-size:12.5px; color:var(--ink-secondary); text-align:left;
+  background:none; border:none; border-radius:var(--radius-sm);
+  padding:6px 8px; cursor:pointer;
+}
+.pf-cat:hover{ background:var(--field); color:var(--ink); }
+.pf-cat:focus-visible{ outline:2px solid var(--blue); outline-offset:-2px; }
+.pf-cat-box{
+  width:15px; height:15px; flex-shrink:0; border-radius:4px;
+  border:1.5px solid var(--control-edge); background:var(--surface);
+  position:relative;
+}
+.pf-cat.on{ color:var(--ink); font-weight:600; }
+.pf-cat.on .pf-cat-box{ background:var(--blue); border-color:var(--blue); }
+.pf-cat.on .pf-cat-box::after{
+  content:""; position:absolute; left:4px; top:1px; width:4px; height:8px;
+  border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg);
+}
+.pf-cat-name{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.pf-cat-new{
+  justify-self:start; font:inherit; font-size:12px; font-weight:600;
+  color:var(--ink-muted); background:none; cursor:pointer;
+  border:1px dashed var(--border-strong); border-radius:7px; padding:6px 11px; min-height:32px;
+}
+.pf-cat-new:hover{ color:var(--ink); border-color:var(--ink-muted); background:var(--field); }
+.pf-cat-new:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
+.pf-cat-add{ display:flex; gap:6px; }
+.pf-cat-add input{
+  min-width:0; flex:1 1 auto; font:inherit; font-size:12.5px; min-height:34px;
+  padding:6px 10px; border-radius:var(--radius-sm);
+  border:1px solid var(--border-strong); background:var(--field); color:var(--ink);
+}
+.pf-cat-add input:focus{ outline:2px solid var(--blue); outline-offset:1px; }
+.pf-cat-add .btn-save{ padding:6px 12px; }
+.pf-rail-hint{ margin:0; font-size:11px; line-height:1.5; color:var(--ink-muted); }
+.pf-rail-empty{ margin:0; font-size:11.5px; color:var(--ink-muted); }
+.pf-rail-error{ margin:0; font-size:11.5px; color:var(--critical-ink); }
+
+/* Under 780px the rail becomes the last block of one column — a 232px
+   sidebar next to a 300px form is two cramped columns rather than one
+   readable one. */
+@media (max-width: 780px){
+  .pf-grid{ grid-template-columns:1fr; gap:16px; }
+  .pf-rail{ border-left:none; padding-left:0; border-top:1px solid var(--border); padding-top:16px; position:static; }
+  .pf-cats{ max-height:none; }
 }

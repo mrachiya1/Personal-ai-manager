@@ -71,6 +71,21 @@ export interface Project {
   completionNote?: string;
   completedOn?: string;
 
+  /* Arranging the list by hand, marking a project, and writing about it.
+     All three are properties lib/projectSchema.ts adds, so all three read
+     undefined on a database the migration has not touched yet. */
+
+  /**
+   * Manual sort position. Lower sorts first; undefined sorts after everything
+   * that has one, so a database with no Order at all keeps its existing shape
+   * until the first row is actually dragged.
+   */
+  order?: number;
+  /** A colour mark, by name — see HIGHLIGHTS in lib/projectSchema.ts. */
+  highlight?: string;
+  /** Running notes kept with the project. */
+  notes?: string;
+
   /** Whatever else is on the Notion page — user-added columns, read by name. */
   custom: Record<string, string | number | boolean | string[] | undefined>;
 }
