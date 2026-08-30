@@ -3460,3 +3460,24 @@ html[data-theme="dark"] .pt-section .pt-res-link:hover{ color:#7dd3fc; }
   .pf-rail{ border-left:none; padding-left:0; border-top:1px solid var(--border); padding-top:16px; position:static; }
   .pf-cats{ max-height:none; }
 }
+
+/* ---------- shared modal header ----------
+   .modal-head and .modal-x had no rules at all — three modals used them and
+   all three put the close button on its own line under the title, because a
+   plain <header> is display:block and the ✕ is just the next element in it.
+   Nothing caught it: the site audit walks routes, and a modal is not a route.
+*/
+.modal-head{
+  display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
+  margin-bottom:14px;
+}
+.modal-head h2{ margin:0; font-size:16px; font-weight:650; letter-spacing:-0.01em; color:var(--ink); }
+.modal-head .modal-sub{ margin:3px 0 0 0; font-size:12px; color:var(--ink-muted); }
+.modal-x{
+  flex-shrink:0; width:28px; height:28px; position:relative;
+  display:grid; place-items:center; padding:0; cursor:pointer;
+  border:none; border-radius:var(--radius-sm); background:none;
+  color:var(--ink-muted); font-size:15px; line-height:1;
+}
+.modal-x:hover{ background:var(--field); color:var(--ink); }
+.modal-x:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }

@@ -51,7 +51,11 @@ export default function DetailsPanel({
       setMessage(null);
     } catch (err) {
       setState("error");
-      setMessage(err instanceof Error ? err.message : "Couldn't save your note");
+      // "Failed to fetch" is what the browser says when the request never
+      // left, and it is not a sentence anyone should have to read about
+      // their own writing. The typed text is still in the box either way.
+      const raw = err instanceof Error ? err.message : "";
+      setMessage(/failed to fetch|networkerror|load failed/i.test(raw) ? "Offline — your note is still here" : raw || "Not saved");
     }
   };
 
