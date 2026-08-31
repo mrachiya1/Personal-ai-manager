@@ -1,12 +1,22 @@
 import Link from "next/link";
-import { getTeamMembers, getCompanies, notionConnected } from "@/lib/notion";
+import { getTeamMembers, getCompanies, getProjects, getTasks, notionConnected } from "@/lib/notion";
 import ConnectPrompt from "@/components/ConnectPrompt";
 import { NewTeamMemberButton, EditTeamMemberButton } from "@/components/TeamForm";
+import TeamSettings from "@/components/TeamSettings";
+import { AUTH_ENABLED } from "@/auth";
 
 const statusBadge: Record<string, string> = { Active: "badge paid", Inactive: "badge pending" };
 
 export default async function TeamPage() {
-  const companies = (await notionConnected()) ? await getCompanies() : [];
+  const connected = await notionConnected();
+  const [companies, projects, tasks] = connected
+    ? await Promise.all([getCompanies(), getProjects(), getTasks()])
+    : [[], [], []];
+
+  const companyOpts = companies.map((c) => ({ id: c.id, name: c.name }));
+  const projectOpts = projects.map((p) => ({ id: p.id, name: p.name, parentId: p.companyId }));
+  const taskOpts = tasks.map((t) => ({ id: t.id, name: t.title, parentId: t.projectId }));
+
   return (
     <>
       <div className="topbar">
@@ -14,13 +24,22 @@ export default async function TeamPage() {
           <div className="eyebrow">Companies · Team</div>
           <h1 className="brand-serif">Team</h1>
         </div>
-        {(await notionConnected()) && (
+        {connected && (
           <div className="topbar-actions">
             <NewTeamMemberButton companies={companies} />
           </div>
         )}
       </div>
-      {!(await notionConnected()) ? <ConnectPrompt /> : <TeamBody companies={companies} />}
+      {!connected ? <ConnectPrompt /> : <TeamBody companies={companies} />}
+
+      {/* ── App access: invite team members & grant company/project access ── */}
+      <TeamSettings
+        companies={companyOpts}
+        projects={projectOpts}
+        tasks={taskOpts}
+        authEnabled={AUTH_ENABLED}
+      />
+
       <div className="footnote">Orex OS — Team · live data from Notion</div>
     </>
   );

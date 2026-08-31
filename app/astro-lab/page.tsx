@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-import { currentRole } from "@/auth";
 import { fetchCurrentTransits, isAstroConnected } from "@/lib/astro";
 import { getPanchangWindows } from "@/lib/panchang";
 import { getAstroEvents, notionConnected } from "@/lib/notion";
@@ -14,9 +12,6 @@ function fmtTime(iso: string) {
 }
 
 export default async function AstroLabPage() {
-  const role = await currentRole();
-  if (role === "member") redirect("/companies");
-
   const todayISO = localDateISO();
   const features = dateFeatures(todayISO);
   const birthDate = setting("birthDate", "BIRTH_DATE");

@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-import { currentRole } from "@/auth";
 import { getSleepLogs, getOpenSleepLog, notionConnected } from "@/lib/notion";
 import ConnectPrompt from "@/components/ConnectPrompt";
 import SleepButtons from "@/components/SleepButtons";
@@ -9,9 +7,6 @@ import { formatLocalTime, tzOffset } from "@/lib/timezone";
 import { formatDateTimeAt } from "@/lib/clock";
 
 export default async function SleepPage() {
-  const role = await currentRole();
-  if (role === "member") redirect("/companies");
-
   return (
     <>
       <div className="topbar">
