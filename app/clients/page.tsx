@@ -1,6 +1,9 @@
 import { getClients, getCompanies, getProjects, getPayments, notionConnected } from "@/lib/notion";
 import ConnectPrompt from "@/components/ConnectPrompt";
 import ClientsView from "@/components/ClientsView";
+import { localDateISO } from "@/lib/timezone";
+
+export const dynamic = "force-dynamic";
 
 export default async function ClientsPage() {
   if (!(await notionConnected())) {
@@ -24,5 +27,13 @@ export default async function ClientsPage() {
     getPayments(),
   ]);
 
-  return <ClientsView clients={clients} companies={companies} projects={projects} payments={payments} />;
+  return (
+    <ClientsView
+      clients={clients}
+      companies={companies}
+      projects={projects}
+      payments={payments}
+      todayISO={localDateISO()}
+    />
+  );
 }

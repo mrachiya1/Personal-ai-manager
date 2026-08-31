@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ClientRecord, Company, Project, Payment } from "@/lib/types";
 import { NewClientButton } from "@/components/ClientForm";
+import { HealthPill, HealthSignals } from "@/components/entity/HealthPill";
+import { buildClientView } from "@/lib/companyView";
 
 const relationshipTagClass: Record<string, string> = {
   VIP: "tag vip",
@@ -16,7 +18,29 @@ const filters = ["All", "Active", "Leads", "Past", "VIP", "Overdue"] as const;
 type Filter = (typeof filters)[number];
 
 function formatMoney(n: number) {
-  return `$${n.toLocaleString()}`;
+  return `${n < 0 ? "-" : ""}$${Math.abs(Math.round(n)).toLocaleString()}`;
+}
+
+function dateLabel(iso?: string): string {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return "—";
+  return new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** "3 days ago" / "4 months ago" — how cold a relationship has gone. */
+function ago(iso: string, todayISO: string): string {
+  const days = Math.round(
+    (new Date(`${todayISO}T00:00:00Z`).getTime() - new Date(`${iso.slice(0, 10)}T00:00:00Z`).getTime()) / 86400000
+  );
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 31) return `${days} days ago`;
+  const months = Math.round(days / 30);
+  return months < 12 ? `${months} month${months === 1 ? "" : "s"} ago` : `${Math.round(days / 365)}y ago`;
 }
 
 function matchesFilter(client: ClientRecord, filter: Filter, overdueClientIds: Set<string>) {
@@ -41,11 +65,16 @@ export default function ClientsView({
   companies,
   projects,
   payments,
+  todayISO,
 }: {
   clients: ClientRecord[];
   companies: Company[];
   projects: Project[];
   payments: Payment[];
+  /** Passed from the server. `new Date()` in a client component renders one
+   *  date on the server and another in the browser, which React reports as a
+   *  hydration mismatch and which silently breaks every date on the page. */
+  todayISO: string;
 }) {
   const [selectedId, setSelectedId] = useState(clients[0]?.id);
   const [activeFilter, setActiveFilter] = useState<Filter>("All");
@@ -69,13 +98,20 @@ export default function ClientsView({
 
   const selected = clients.find((c) => c.id === selectedId) ?? filteredClients[0];
   const selectedCompany = selected ? companyById(selected.companyId) : undefined;
-  const selectedPayments = selected ? payments.filter((p) => p.clientId === selected.id) : [];
-  const selectedProjects = selected
-    ? projects.filter((p) => selectedPayments.some((pay) => pay.projectId === p.id))
-    : [];
-  const totalBilled = selectedPayments.reduce((sum, p) => sum + p.amount, 0);
-  const totalPaid = selectedPayments.filter((p) => p.status === "Paid").reduce((sum, p) => sum + p.amount, 0);
-  const outstanding = totalBilled - totalPaid;
+  // The same derivation the company profile uses — see lib/companyView.ts.
+  // The old version found a client's projects by walking their PAYMENTS, so a
+  // project with a client set but nothing invoiced yet appeared nowhere, and
+  // the panel said "No projects linked via payments yet" about a client who
+  // had two live projects.
+  const view = useMemo(
+    () =>
+      selected
+        ? buildClientView({ client: selected, companies, projects, payments, todayISO, money: formatMoney })
+        : null,
+    [selected, companies, projects, payments, todayISO]
+  );
+  const selectedPayments = view?.payments ?? [];
+  const selectedProjects = view?.projects ?? [];
 
   const timeline = [...selectedPayments]
     .sort((a, b) => (b.paidDate ?? b.dueDate ?? "").localeCompare(a.paidDate ?? a.dueDate ?? ""))
@@ -255,84 +291,125 @@ export default function ClientsView({
               </div>
             </div>
 
-            <div className="detail-tabs">
-              <div className="tab-btn active">Overview</div>
-            </div>
-
-            <div className="stat-mini-grid">
-              <div className="stat-mini">
-                <div className="stat-label">Total Billed</div>
-                <div className="stat-value">{formatMoney(totalBilled)}</div>
-              </div>
-              <div className="stat-mini">
-                <div className="stat-label">Total Paid</div>
-                <div className="stat-value">{formatMoney(totalPaid)}</div>
-              </div>
-              <div className="stat-mini">
-                <div className="stat-label">Outstanding</div>
-                <div className="stat-value" style={{ color: outstanding > 0 ? "var(--critical-ink)" : undefined }}>
-                  {formatMoney(outstanding)}
+            {/* A tab bar with one tab in it is chrome for nothing. What the
+                panel was missing was not navigation but a verdict: whether
+                this relationship is fine, and why. */}
+            {view && (
+              <>
+                <div className="cl-verdict">
+                  <HealthPill health={view.health} />
+                  {view.lastActivity && (
+                    <span className="cl-last">
+                      Last activity {ago(view.lastActivity.date, todayISO)} · {view.lastActivity.label}
+                    </span>
+                  )}
                 </div>
-              </div>
-              <div className="stat-mini">
-                <div className="stat-label">Lifetime Projects</div>
-                <div className="stat-value">{selectedProjects.length}</div>
-              </div>
-            </div>
+
+                <dl className="cl-money">
+                  <div>
+                    <dt>Billed</dt>
+                    <dd>{formatMoney(view.money.invoiced)}</dd>
+                  </div>
+                  <div>
+                    <dt>Paid</dt>
+                    <dd className="good">{formatMoney(view.money.paid)}</dd>
+                  </div>
+                  <div>
+                    <dt>Outstanding</dt>
+                    <dd className={view.money.outstanding > 0 ? "bad" : undefined}>
+                      {formatMoney(view.money.outstanding)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Overdue</dt>
+                    <dd className={view.money.overdue > 0 ? "bad" : undefined}>{formatMoney(view.money.overdue)}</dd>
+                  </div>
+                  <div>
+                    <dt>Not invoiced</dt>
+                    <dd className={view.money.uninvoiced > 0 ? "warn" : undefined}>
+                      {formatMoney(view.money.uninvoiced)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Projects</dt>
+                    <dd>
+                      {view.liveProjects.length} live · {view.projects.length} all time
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="subsection">
+                  <div className="subsection-title">What needs attention</div>
+                  <HealthSignals health={view.health} />
+                </div>
+              </>
+            )}
 
             {selected.notes && (
               <div className="subsection">
-                <div className="subsection-title">Relationship Notes</div>
-                <textarea className="editable" readOnly defaultValue={selected.notes} />
+                <div className="subsection-title">Relationship notes</div>
+                <p className="cl-notes">{selected.notes}</p>
               </div>
             )}
 
             <div className="subsection">
-              <div className="subsection-title">Linked Projects</div>
-              <table className="mini">
+              <div className="subsection-title">Projects</div>
+              <table className="mini stacks">
                 <tbody>
                   <tr>
                     <th>Project</th>
                     <th>Status</th>
+                    <th>Deadline</th>
+                    <th className="num">Value</th>
                   </tr>
                   {selectedProjects.length === 0 && (
                     <tr>
-                      <td colSpan={2} style={{ color: "var(--ink-muted)" }}>No projects linked via payments yet.</td>
+                      <td colSpan={4} className="fin-empty">No projects for this client yet.</td>
                     </tr>
                   )}
-                  {selectedProjects.map((p) => (
-                    <tr key={p.id}>
-                      <td>
-                        <div className="proj-name">{p.name}</div>
-                      </td>
-                      <td>
-                        <span className={p.status === "Delivered" ? "badge low" : "badge high"}>{p.status}</span>
-                      </td>
-                    </tr>
-                  ))}
+                  {selectedProjects.map((p) => {
+                    const late = p.status !== "Delivered" && p.deadline && p.deadline < todayISO;
+                    return (
+                      <tr key={p.id}>
+                        <td data-label="Project">
+                          <div className="proj-name">{p.name}</div>
+                        </td>
+                        <td data-label="Status">
+                          <span className={`badge ${p.status === "Delivered" ? "paid" : "med"}`}>{p.status}</span>
+                        </td>
+                        <td data-label="Deadline" className={late ? "cp-late" : undefined}>
+                          {dateLabel(p.deadline)}
+                          {late && " · late"}
+                        </td>
+                        <td data-label="Value" className="num money">{p.value ? formatMoney(p.value) : "—"}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             <div className="subsection">
               <div className="subsection-title">Payment History</div>
-              <table className="mini">
+              <table className="mini stacks">
                 <tbody>
                   <tr>
                     <th>Invoice</th>
-                    <th>Amount</th>
+                    <th>Due</th>
+                    <th className="num">Amount</th>
                     <th>Status</th>
                   </tr>
                   {selectedPayments.length === 0 && (
                     <tr>
-                      <td colSpan={3} style={{ color: "var(--ink-muted)" }}>No payments recorded yet.</td>
+                      <td colSpan={4} className="fin-empty">No payments recorded yet.</td>
                     </tr>
                   )}
                   {selectedPayments.map((p) => (
                     <tr key={p.id}>
-                      <td>{p.label}</td>
-                      <td>{formatMoney(p.amount)}</td>
-                      <td>
+                      <td data-label="Invoice">{p.label}</td>
+                      <td data-label="Due">{dateLabel(p.dueDate)}</td>
+                      <td data-label="Amount" className="num money">{formatMoney(p.amount)}</td>
+                      <td data-label="Status">
                         <span
                           className={
                             p.status === "Overdue" ? "badge overdue" : p.status === "Paid" ? "badge paid" : "badge pending"

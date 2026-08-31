@@ -16,11 +16,22 @@ import { NewIncomeButton } from "@/components/IncomeForm";
 import { NewAccountButton, EditAccountButton } from "@/components/AccountForm";
 import { NewGoalButton } from "@/components/GoalForm";
 import { NewWishlistButton } from "@/components/WishlistForm";
-import { localMonthISO, localDateISO } from "@/lib/timezone";
+import { localDateISO } from "@/lib/timezone";
+import { byCategory, groupByCurrency, movement, resolvePeriod, within } from "@/lib/financePeriod";
+import PeriodChips from "@/components/finance/PeriodChips";
+import MoneyStat from "@/components/finance/MoneyStat";
 
+/**
+ * A minus sign belongs in front of the symbol, not between them.
+ *
+ * `Rs -157,400` and `$-157,400` were both being printed. Every accounting
+ * convention in use puts the sign outermost, and a stray one inside a figure
+ * reads as a typo in the number rather than as a negative balance.
+ */
 function formatMoney(n: number, currency: string = "LKR") {
   const symbol = currency === "USD" ? "$" : "Rs ";
-  return `${symbol}${Math.round(n).toLocaleString()}`;
+  const rounded = Math.round(n);
+  return `${rounded < 0 ? "-" : ""}${symbol}${Math.abs(rounded).toLocaleString()}`;
 }
 
 const priorityBadge: Record<string, string> = { High: "badge high", Medium: "badge med", Low: "badge low" };
@@ -50,7 +61,14 @@ const accountTypeBadge: Record<string, string> = {
   Other: "badge pending",
 };
 
-export default async function FinancePage() {
+export const dynamic = "force-dynamic";
+
+export default async function FinancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const { period: periodKey } = await searchParams;
   const companies = (await notionConnected()) ? await getCompanies() : [];
   const accounts = (await notionConnected()) ? await getAccounts() : [];
   const payments = (await notionConnected()) ? await getPayments() : [];
@@ -69,7 +87,7 @@ export default async function FinancePage() {
           </div>
         )}
       </div>
-      {!(await notionConnected()) ? <ConnectPrompt /> : <FinanceBody />}
+      {!(await notionConnected()) ? <ConnectPrompt /> : <FinanceBody periodKey={periodKey} />}
       <div className="footnote">Orex OS — Finance &amp; Goals · live data from Notion</div>
     </>
   );
@@ -103,7 +121,7 @@ function projectMonthsToGoal(
   return `At your recent pace (~${formatMoney(avgNet)}/mo net), ~${monthsToGo} month${monthsToGo === 1 ? "" : "s"} to go`;
 }
 
-async function FinanceBody() {
+async function FinanceBody({ periodKey }: { periodKey?: string }) {
   const [goals, wishlist, expenses, income, accounts, projects] = await Promise.all([
     getFinanceGoals(),
     getWishlistItems(),
@@ -113,28 +131,34 @@ async function FinanceBody() {
     getProjects(),
   ]);
   const companies = await getCompanies();
-  const thisMonth = localMonthISO();
-  const monthExpenses = expenses.filter((e) => (e.date || "").startsWith(thisMonth));
-  const monthTotal = monthExpenses.reduce((s, e) => s + e.amount, 0);
-  const monthIncome = income.filter((i) => (i.date || "").startsWith(thisMonth));
-  const monthIncomeTotal = monthIncome.reduce((s, i) => s + i.amount, 0);
-  const recurringTotal = expenses
-    .filter((e) => e.recurring && (e.date || "").startsWith(thisMonth))
-    .reduce((s, e) => s + e.amount, 0);
-  const byCategory: Record<string, number> = {};
-  for (const e of monthExpenses) byCategory[e.category] = (byCategory[e.category] || 0) + e.amount;
-
-  // Week-to-date figures (Monday start), alongside the month-to-date ones above.
   const todayISO = localDateISO();
-  const weekday = new Date(`${todayISO}T12:00:00Z`).getUTCDay(); // 0=Sun..6=Sat
-  const mondayOffsetDays = (weekday + 6) % 7;
-  const monday = new Date(`${todayISO}T12:00:00Z`);
-  monday.setUTCDate(monday.getUTCDate() - mondayOffsetDays);
-  const weekStartISO = monday.toISOString().slice(0, 10);
-  const weekExpenseTotal = expenses.filter((e) => (e.date || "") >= weekStartISO).reduce((s, e) => s + e.amount, 0);
-  const weekIncomeTotal = income.filter((i) => (i.date || "") >= weekStartISO).reduce((s, i) => s + i.amount, 0);
-  const todayExpenseTotal = expenses.filter((e) => (e.date || "") === todayISO).reduce((s, e) => s + e.amount, 0);
-  const todayIncomeTotal = income.filter((i) => (i.date || "") === todayISO).reduce((s, i) => s + i.amount, 0);
+  const period = resolvePeriod(periodKey, todayISO);
+
+  // Everything on this page is measured over ONE period, chosen by the
+  // person. The old version put "This Month's Income" above tables listing
+  // every record ever logged — two different spans of time on one screen,
+  // neither of them selectable.
+  const periodIncome = within(income, period.from, period.to);
+  const periodExpenses = within(expenses, period.from, period.to);
+  const incomeMove = movement(income, period);
+  const expenseMove = movement(expenses, period);
+  const net = incomeMove.total - expenseMove.total;
+  const prevNet =
+    incomeMove.previous !== null && expenseMove.previous !== null ? incomeMove.previous - expenseMove.previous : null;
+  const netMove = {
+    total: net,
+    count: periodIncome.length + periodExpenses.length,
+    previous: prevNet,
+    changePct: prevNet === null || prevNet === 0 ? null : ((net - prevNet) / Math.abs(prevNet)) * 100,
+  };
+
+  const spendByCategory = byCategory(periodExpenses, "category");
+  const recurringTotal = periodExpenses.filter((e) => e.recurring).reduce((s, e) => s + e.amount, 0);
+
+  // Grouped by the currency each account is actually held in. Summing them
+  // was printing a USD balance as though it were rupees — see
+  // groupByCurrency() for why this shows two figures rather than one.
+  const worth = groupByCurrency(accounts);
 
   const accountById = (id?: string) => accounts.find((a) => a.id === id);
   const projectById = (id?: string) => projects.find((p) => p.id === id);
@@ -142,174 +166,286 @@ async function FinanceBody() {
 
   return (
     <>
-      <section className="stat-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
-        <div className="card stat-tile">
-          <span className="stat-label">This Month&rsquo;s Income</span>
-          <div className="stat-value">{formatMoney(monthIncomeTotal)}</div>
-          <div className="stat-delta flat">
-            {monthIncome.length} logged · {formatMoney(weekIncomeTotal)} this week · {formatMoney(todayIncomeTotal)} today
+      {/* The period governs the whole page, so it sits above everything the
+          period applies to rather than inside one card. */}
+      <PeriodChips current={period} />
+
+      <section className="fin-hero">
+        <div className="card fin-worth">
+          <span className="fin-stat-label">Net worth</span>
+          {worth.length === 0 ? (
+            <div className="fin-worth-value">{formatMoney(0)}</div>
+          ) : (
+            <>
+              <div className="fin-worth-value">{formatMoney(worth[0].total, worth[0].currency)}</div>
+              {worth.slice(1).map((w) => (
+                <div key={w.currency} className="fin-worth-alt">
+                  + {formatMoney(w.total, w.currency)}
+                </div>
+              ))}
+            </>
+          )}
+          <div className="fin-worth-foot">
+            Across {accounts.length} account{accounts.length === 1 ? "" : "s"}
+            {accounts.some((a) => a.type === "Credit Card") && " · card balances subtracted"}
+            {worth.length > 1 && " · held in different currencies, not converted"}
           </div>
+          <ul className="fin-worth-list">
+            {/* Grouped by currency first, then by size WITHIN a currency.
+                Sorting Rs 38,000 against $4,820 by raw magnitude compares two
+                different units and puts them in a meaningless order. */}
+            {[...accounts]
+              .sort(
+                (a, b) =>
+                  (a.currency || "LKR").localeCompare(b.currency || "LKR") ||
+                  Math.abs(b.balance) - Math.abs(a.balance)
+              )
+              .slice(0, 4)
+              .map((a) => (
+                <li key={a.id}>
+                  <span className="fw-name">{a.name}</span>
+                  <span className="fw-amount">{formatMoney(a.type === "Credit Card" ? -a.balance : a.balance, a.currency)}</span>
+                </li>
+              ))}
+            {accounts.length === 0 && <li className="fw-empty">No accounts tracked yet.</li>}
+          </ul>
         </div>
-        <div className="card stat-tile">
-          <span className="stat-label">This Month&rsquo;s Expenses</span>
-          <div className="stat-value">{formatMoney(monthTotal)}</div>
-          <div className="stat-delta flat">
-            {monthExpenses.length} logged · {formatMoney(weekExpenseTotal)} this week · {formatMoney(todayExpenseTotal)} today
-          </div>
-        </div>
-        <div className="card stat-tile">
-          <span className="stat-label">Net This Month</span>
-          <div className={`stat-value`} style={{ color: monthIncomeTotal - monthTotal >= 0 ? undefined : "var(--critical-ink)" }}>
-            {formatMoney(monthIncomeTotal - monthTotal)}
-          </div>
-          <div className="stat-delta flat">Income − expenses</div>
-        </div>
-        <div className="card stat-tile">
-          <span className="stat-label">Top Category</span>
-          <div className="stat-value" style={{ fontSize: 18 }}>
-            {Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—"}
-          </div>
-          <div className="stat-delta flat">
-            {Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0]
-              ? formatMoney(Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0][1])
-              : "No expenses logged yet"}
-          </div>
+
+        <div className="fin-stats">
+          <MoneyStat
+            label="Money in"
+            value={incomeMove.total}
+            movement={incomeMove}
+            period={period}
+            format={formatMoney}
+            intent="up-good"
+            foot={`${incomeMove.count} entr${incomeMove.count === 1 ? "y" : "ies"} · ${period.label.toLowerCase()}`}
+          />
+          <MoneyStat
+            label="Money out"
+            value={expenseMove.total}
+            movement={expenseMove}
+            period={period}
+            format={formatMoney}
+            intent="up-bad"
+            foot={
+              recurringTotal
+                ? `${formatMoney(recurringTotal)} of it recurring`
+                : `${expenseMove.count} entr${expenseMove.count === 1 ? "y" : "ies"}`
+            }
+          />
+          <MoneyStat
+            label="Net"
+            value={net}
+            movement={netMove}
+            period={period}
+            format={formatMoney}
+            intent="up-good"
+            tone={net >= 0 ? "good" : "bad"}
+            foot={net >= 0 ? "Kept, after everything out" : "Spending more than came in"}
+          />
         </div>
       </section>
 
-      <div className="card section-card" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      {spendByCategory.length > 0 && (
+        <section className="card fin-breakdown">
+          <div className="fin-bd-head">
+            <h2>Where it went</h2>
+            <span className="section-sub">
+              {period.label} · {formatMoney(expenseMove.total)} across {spendByCategory.length} categor
+              {spendByCategory.length === 1 ? "y" : "ies"}
+            </span>
+          </div>
+          <ul className="fin-bars">
+            {spendByCategory.slice(0, 6).map((c) => (
+              <li key={c.name}>
+                <span className="fb-name">{c.name}</span>
+                <span className="fb-track" aria-hidden>
+                  <span className="fb-fill" style={{ width: `${Math.max(2, c.share)}%` }} />
+                </span>
+                <span className="fb-amount">{formatMoney(c.total)}</span>
+                <span className="fb-share">{c.share.toFixed(0)}%</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* data-label on every cell is what turns these rows into cards on a
+          phone. Without it `table.mini` fell back to a horizontal scroll, and
+          on the Accounts table that put Balance, Updated and the Update button
+          off the right edge with no visible way to reach them. */}
+      <div className="card section-card fin-table-card">
+        <div className="fin-card-head">
           <div>
             <h2>Accounts</h2>
-            <div className="section-sub">
-              Bank, investment, cash &amp; credit — {accounts.length} account(s) tracked
-            </div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 11, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: 0.4 }}>
-              Net Worth
-            </div>
-            <div style={{ fontSize: 22, fontWeight: 600 }}>
-              {formatMoney(accounts.reduce((s, a) => s + (a.type === "Credit Card" ? -a.balance : a.balance), 0))}
-            </div>
+            <div className="section-sub">Bank, investment, cash &amp; credit — balances as last updated</div>
           </div>
         </div>
-        <table className="mini">
+        <table className="mini stacks">
           <tbody>
             <tr>
               <th>Name</th>
               <th>Type</th>
               <th>Institution</th>
-              <th>Balance</th>
+              <th className="num">Balance</th>
               <th>Updated</th>
               <th></th>
             </tr>
             {accounts.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ color: "var(--ink-muted)" }}>
+                <td colSpan={6} className="fin-empty">
                   No accounts yet — click &ldquo;Add Account&rdquo; above to track a bank balance, investment, or credit card.
                 </td>
               </tr>
             )}
             {accounts.map((a) => (
               <tr key={a.id}>
-                <td>
+                <td data-label="Account">
                   <div className="proj-name">{a.name}</div>
                   {a.currency && <div className="proj-client">{a.currency}</div>}
                 </td>
-                <td><span className={accountTypeBadge[a.type] ?? "badge pending"}>{a.type}</span></td>
-                <td>{a.institution || "—"}</td>
-                <td>{formatMoney(a.balance, a.currency)}</td>
-                <td>{a.lastUpdated ?? "—"}</td>
-                <td><EditAccountButton account={a} /></td>
+                <td data-label="Type"><span className={accountTypeBadge[a.type] ?? "badge pending"}>{a.type}</span></td>
+                <td data-label="Institution">{a.institution || "—"}</td>
+                <td data-label="Balance" className="num money">
+                  {formatMoney(a.type === "Credit Card" ? -a.balance : a.balance, a.currency)}
+                </td>
+                <td data-label="Updated">{a.lastUpdated ?? "—"}</td>
+                <td className="fin-row-action"><EditAccountButton account={a} /></td>
               </tr>
             ))}
+            {accounts.length > 0 && (
+              <tr className="fin-total">
+                <td data-label="Total">Net worth</td>
+                <td /><td />
+                <td data-label="Balance" className="num money">
+                  {worth.map((w) => formatMoney(w.total, w.currency)).join("  +  ")}
+                </td>
+                <td /><td />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
-      <div className="card section-card" style={{ marginBottom: 16 }}>
-        <h2>Income</h2>
-        <div className="section-sub">Client payments, salary, freelance, gifts &amp; more — {income.length} logged total</div>
-        <table className="mini">
+      <div className="card section-card fin-table-card">
+        <div className="fin-card-head">
+          <div>
+            <h2>Money in</h2>
+            <div className="section-sub">
+              {period.label} · {incomeMove.count} entr{incomeMove.count === 1 ? "y" : "ies"}
+              {income.length > incomeMove.count && ` · ${income.length} logged in total`}
+            </div>
+          </div>
+          <span className="fin-card-total money">{formatMoney(incomeMove.total)}</span>
+        </div>
+        <table className="mini stacks">
           <tbody>
             <tr>
               <th>Name</th>
               <th>Source</th>
-              <th>Amount</th>
+              <th className="num">Amount</th>
               <th>Date</th>
               <th>Account</th>
             </tr>
-            {income.length === 0 && (
+            {periodIncome.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ color: "var(--ink-muted)" }}>Nothing logged yet — click &ldquo;Log Income&rdquo; above.</td>
+                <td colSpan={5} className="fin-empty">
+                  Nothing came in {period.label.toLowerCase()}.
+                  {income.length > 0 && " Try a longer period above, or click “Log Income”."}
+                </td>
               </tr>
             )}
-            {income.slice(0, 20).map((i) => (
+            {periodIncome.slice(0, 25).map((i) => (
               <tr key={i.id}>
-                <td>
+                <td data-label="Name">
                   <div className="proj-name">{i.name}</div>
                   {companyById(i.companyId) && (
-                    <Link href={`/companies/${i.companyId}`} className="proj-client" style={{ display: "block" }}>
+                    <Link href={`/companies/${i.companyId}`} className="proj-client inline-link">
                       {companyById(i.companyId)?.name}
                     </Link>
                   )}
                 </td>
-                <td><span className={sourceBadge[i.source] ?? "badge pending"}>{i.source}</span></td>
-                <td>{formatMoney(i.amount, i.currency)}</td>
-                <td>{i.date ?? "—"}</td>
-                <td>{accountById(i.accountId)?.name ?? "—"}</td>
+                <td data-label="Source"><span className={sourceBadge[i.source] ?? "badge pending"}>{i.source}</span></td>
+                <td data-label="Amount" className="num money">{formatMoney(i.amount, i.currency)}</td>
+                <td data-label="Date">{i.date ?? "—"}</td>
+                <td data-label="Account">{accountById(i.accountId)?.name ?? "—"}</td>
               </tr>
             ))}
+            {periodIncome.length > 25 && (
+              <tr>
+                <td colSpan={5} className="fin-more">
+                  Showing the first 25 of {periodIncome.length}. Narrow the period to see the rest.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
-      <div className="card section-card" style={{ marginBottom: 16 }}>
-        <h2>Expenses</h2>
-        <div className="section-sub">Subscriptions, software rental, fuel, salary, donations &amp; everything else — {expenses.length} logged total</div>
-        <table className="mini">
+      <div className="card section-card fin-table-card">
+        <div className="fin-card-head">
+          <div>
+            <h2>Money out</h2>
+            <div className="section-sub">
+              {period.label} · {expenseMove.count} entr{expenseMove.count === 1 ? "y" : "ies"}
+              {recurringTotal > 0 && ` · ${formatMoney(recurringTotal)} recurring`}
+            </div>
+          </div>
+          <span className="fin-card-total money">{formatMoney(expenseMove.total)}</span>
+        </div>
+        <table className="mini stacks">
           <tbody>
             <tr>
               <th>Name</th>
               <th>Category</th>
-              <th>Amount</th>
+              <th className="num">Amount</th>
               <th>Date</th>
               <th>Account</th>
               <th>Recurring</th>
               <th></th>
             </tr>
-            {expenses.length === 0 && (
+            {periodExpenses.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ color: "var(--ink-muted)" }}>Nothing logged yet — click &ldquo;Log Expense&rdquo; above, or snap a receipt photo.</td>
+                <td colSpan={7} className="fin-empty">
+                  Nothing went out {period.label.toLowerCase()}.
+                  {expenses.length > 0 && " Try a longer period above, or click “Log Expense”."}
+                </td>
               </tr>
             )}
-            {expenses.slice(0, 20).map((e) => (
+            {periodExpenses.slice(0, 25).map((e) => (
               <tr key={e.id}>
-                <td>
+                <td data-label="Name">
                   <div className="proj-name">{e.name}</div>
                   {e.vendor && <div className="proj-client">{e.vendor}</div>}
                   {companyById(e.companyId) && (
-                    <Link href={`/companies/${e.companyId}`} className="proj-client" style={{ display: "block" }}>
+                    <Link href={`/companies/${e.companyId}`} className="proj-client inline-link">
                       {companyById(e.companyId)?.name}
                     </Link>
                   )}
                 </td>
-                <td><span className={categoryBadge[e.category] ?? "badge pending"}>{e.category}</span></td>
-                <td>{formatMoney(e.amount, e.currency)}</td>
-                <td>{e.date ?? "—"}</td>
-                <td>{accountById(e.accountId)?.name ?? "—"}</td>
-                <td>{e.recurring ? "Yes" : "—"}</td>
-                <td><EditExpenseButton expense={e} companies={companies} /></td>
+                <td data-label="Category"><span className={categoryBadge[e.category] ?? "badge pending"}>{e.category}</span></td>
+                <td data-label="Amount" className="num money">{formatMoney(e.amount, e.currency)}</td>
+                <td data-label="Date">{e.date ?? "—"}</td>
+                <td data-label="Account">{accountById(e.accountId)?.name ?? "—"}</td>
+                <td data-label="Recurring">{e.recurring ? "Yes" : "—"}</td>
+                <td className="fin-row-action"><EditExpenseButton expense={e} companies={companies} /></td>
               </tr>
             ))}
+            {periodExpenses.length > 25 && (
+              <tr>
+                <td colSpan={7} className="fin-more">
+                  Showing the first 25 of {periodExpenses.length}. Narrow the period to see the rest.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
       <section className="grid-2">
-      <div className="card section-card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div className="card section-card fin-table-card">
+        <div className="fin-card-head">
           <div>
             <h2>Goals</h2>
             <div className="section-sub">Personal + company targets</div>
@@ -333,7 +469,7 @@ async function FinanceBody() {
               <div className="track">
                 <div style={{ width: `${Math.min(100, Math.round((goal.currentAmount / (goal.targetAmount || 1)) * 100))}%` }} />
               </div>
-              <div style={{ fontSize: 11, color: "var(--ink-muted)", marginTop: 5, display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <div className="goal-meta">
                 {accountById(goal.linkedAccountId) && <span>🏦 {accountById(goal.linkedAccountId)?.name}</span>}
                 {projectById(goal.linkedProjectId) && <span>📁 {projectById(goal.linkedProjectId)?.name}</span>}
                 <span>{projectMonthsToGoal(remaining, income, expenses)}</span>
@@ -343,38 +479,47 @@ async function FinanceBody() {
         })}
       </div>
 
-      <div className="card section-card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div className="card section-card fin-table-card">
+        <div className="fin-card-head">
           <div>
             <h2>Wishlist</h2>
-            <div className="section-sub">{wishlist.length} item(s)</div>
+            <div className="section-sub">{wishlist.length} item{wishlist.length === 1 ? "" : "s"}</div>
           </div>
           <NewWishlistButton />
         </div>
-        <table className="mini">
+        <table className="mini stacks">
           <tbody>
             <tr>
               <th>Item</th>
-              <th>Cost</th>
+              <th className="num">Cost</th>
               <th>Priority</th>
             </tr>
             {wishlist.length === 0 && (
               <tr>
-                <td colSpan={3} style={{ color: "var(--ink-muted)" }}>Nothing on the wishlist yet — click &ldquo;Add to Wishlist&rdquo; above.</td>
+                <td colSpan={3} className="fin-empty">Nothing on the wishlist yet — click &ldquo;Add to Wishlist&rdquo; above.</td>
               </tr>
             )}
             {wishlist.map((item) => (
               <tr key={item.id}>
-                <td>
+                <td data-label="Item">
                   <div className="proj-name">{item.item}</div>
                   {item.category && <div className="proj-client">{item.category}</div>}
                 </td>
-                <td>{item.estimatedCost ? formatMoney(item.estimatedCost) : "—"}</td>
-                <td>
+                <td data-label="Cost" className="num money">{item.estimatedCost ? formatMoney(item.estimatedCost) : "—"}</td>
+                <td data-label="Priority">
                   <span className={priorityBadge[item.priority]}>{item.priority}</span>
                 </td>
               </tr>
             ))}
+            {wishlist.length > 0 && (
+              <tr className="fin-total">
+                <td data-label="Total">If you bought all of it</td>
+                <td data-label="Cost" className="num money">
+                  {formatMoney(wishlist.reduce((s2, i) => s2 + (i.estimatedCost || 0), 0))}
+                </td>
+                <td />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

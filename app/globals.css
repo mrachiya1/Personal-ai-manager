@@ -617,7 +617,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible{
   .stat-mini-grid{ grid-template-columns: repeat(2, 1fr); }
   .fact-grid{ grid-template-columns: repeat(2, 1fr); }
   .form-row{ grid-template-columns: 1fr; }
-  table.mini{ display:block; overflow-x:auto; white-space:nowrap; }
+  /* `table.mini` used to become a horizontally scrolling block here. On the
+     Accounts table that put Balance, Updated and the Update button off the
+     right edge with no visible affordance saying so — you could not see your
+     own bank balance on your phone. Tables marked `.stacks` become cards
+     instead, on the same principle the Projects table already follows; the
+     rest keep the scroll because they have not been given the labels yet. */
+  table.mini:not(.stacks){ display:block; overflow-x:auto; }
   .modal{ max-width:100%; max-height:88vh; overflow-y:auto; }
   .board-col{ flex-basis:80vw; }
   .filter-row{ gap:8px; }
@@ -1496,10 +1502,14 @@ table.dt.pw-table .avatar-stack .av{ width:21px; height:21px; }
 .synth-pill{
   display:inline-flex; align-items:center; gap:6px; align-self:flex-start;
   min-height:22px; padding:0 10px; border-radius:999px;
-  background:var(--good-bg); color:var(--good);
+  /* --good and --blue are MARK colours, tuned to read as a dot or a border.
+     As 10.5px uppercase text on their own tints they measure 4.19:1 and
+     similar — under AA. The -ink tokens are the same roles sized for text on
+     that tint, which is the whole reason they exist. */
+  background:var(--good-bg); color:var(--good-ink);
   font-size:10.5px; font-weight:650; letter-spacing:0.06em; text-transform:uppercase;
 }
-.synth.steady .synth-pill{ background:rgba(42,120,214,0.12); color:var(--blue); }
+.synth.steady .synth-pill{ background:rgba(42,120,214,0.12); color:var(--blue-on-field); }
 .synth.thin .synth-pill{ background:var(--warning-bg); color:var(--warning-ink); }
 .synth-pill .dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
 .synth-headline{
@@ -3481,3 +3491,333 @@ html[data-theme="dark"] .pt-section .pt-res-link:hover{ color:#7dd3fc; }
 }
 .modal-x:hover{ background:var(--field); color:var(--ink); }
 .modal-x:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
+
+/* ==================================================================
+   Finance
+   ==================================================================
+   Three things the page did not have: a period it was actually reporting on,
+   any sense of direction, and a phone layout. The first two are why a total
+   sat next to tables covering a different span of time; the third is why the
+   Accounts table ran off the right edge of a 390px screen.
+*/
+
+/* ---------- period ---------- */
+.period-chips{ display:flex; gap:7px; flex-wrap:wrap; margin-bottom:16px; }
+.period-chip{
+  display:inline-flex; align-items:center; min-height:34px;
+  font-size:12.5px; font-weight:600; color:var(--ink-secondary);
+  padding:7px 14px; border-radius:999px; text-decoration:none;
+  border:1px solid var(--border-strong); background:var(--surface);
+}
+.period-chip:hover{ color:var(--ink); background:var(--field); }
+.period-chip:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
+.period-chip.on{ background:var(--ink); color:var(--page); border-color:var(--ink); }
+
+/* ---------- the hero ---------- */
+/* Net worth is the largest and most durable number on the page. It used to be
+   right-aligned inside a section header at 11px, under the word "NET WORTH"
+   in grey — the least prominent position on the screen. */
+.fin-hero{ display:grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap:14px; margin-bottom:16px; }
+.card.fin-worth{ padding:18px 20px 16px; display:flex; flex-direction:column; }
+.fin-worth-value{
+  font-size:30px; font-weight:650; letter-spacing:-0.02em; margin-top:6px;
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.fin-worth-foot{ font-size:11.5px; color:var(--ink-muted); margin-top:4px; }
+.fin-worth-list{ list-style:none; margin:14px 0 0 0; padding:12px 0 0 0; border-top:1px solid var(--border); display:grid; gap:7px; }
+.fin-worth-list li{ display:flex; align-items:baseline; gap:10px; font-size:12px; min-width:0; }
+.fw-name{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-secondary); }
+.fw-amount{ margin-left:auto; flex-shrink:0; font-variant-numeric:tabular-nums; white-space:nowrap; color:var(--ink); }
+.fw-empty{ color:var(--ink-muted); }
+
+.fin-stats{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:14px; }
+.card.fin-stat{ padding:18px 20px; display:flex; flex-direction:column; }
+.fin-stat-label{ font-size:11.5px; color:var(--ink-muted); font-weight:600; }
+.fin-stat-value{
+  font-size:25px; font-weight:650; letter-spacing:-0.02em; margin-top:7px;
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.fin-stat-value.good{ color:var(--good-ink); }
+.fin-stat-value.bad{ color:var(--critical-ink); }
+.fin-stat-delta{ display:flex; align-items:baseline; gap:8px; margin-top:8px; flex-wrap:wrap; }
+.fin-delta{ display:inline-flex; align-items:center; gap:3px; font-size:12px; font-weight:650; white-space:nowrap; }
+.fin-delta svg{ width:13px; height:13px; }
+.fin-delta.good{ color:var(--good-ink); }
+.fin-delta.bad{ color:var(--critical-ink); }
+.fin-delta.flat{ color:var(--ink-muted); font-weight:600; }
+.fin-delta-vs{ font-size:11.5px; color:var(--ink-muted); min-width:0; }
+.fin-stat-foot{ font-size:11.5px; color:var(--ink-muted); margin-top:auto; padding-top:8px; }
+
+/* ---------- where it went ---------- */
+.card.fin-breakdown{ padding:16px 20px 18px; margin-bottom:16px; }
+.fin-bd-head{ display:flex; align-items:baseline; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:12px; }
+.fin-bd-head h2{ margin:0; font-size:15px; font-weight:600; letter-spacing:-0.01em; }
+.fin-bd-head .section-sub{ margin:0; }
+.fin-bars{ list-style:none; margin:0; padding:0; display:grid; gap:9px; }
+.fin-bars li{ display:grid; grid-template-columns: minmax(88px, 150px) minmax(0, 1fr) auto auto; align-items:center; gap:12px; font-size:12.5px; }
+.fb-name{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink); }
+.fb-track{ height:7px; border-radius:99px; background:var(--field); overflow:hidden; }
+.fb-fill{ display:block; height:100%; border-radius:99px; background:var(--blue); }
+.fb-amount{ font-variant-numeric:tabular-nums; white-space:nowrap; color:var(--ink); }
+.fb-share{ font-variant-numeric:tabular-nums; white-space:nowrap; color:var(--ink-muted); width:34px; text-align:right; }
+
+/* ---------- tables ---------- */
+.card.section-card.fin-table-card{ margin-bottom:16px; }
+.fin-card-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.fin-card-total{
+  font-size:19px; font-weight:650; letter-spacing:-0.015em;
+  font-variant-numeric:tabular-nums; white-space:nowrap; flex-shrink:0;
+}
+/* Figures never wrap and always align on the decimal. "Rs" on one line and
+   "360,000" on the next is not a number anyone can read at a glance. */
+table.mini td.money, table.mini th.num, table.mini td.num{ font-variant-numeric:tabular-nums; white-space:nowrap; }
+table.mini th.num, table.mini td.num{ text-align:right; }
+table.mini tr.fin-total td{
+  border-top:1px solid var(--border-strong); border-bottom:none;
+  font-weight:650; color:var(--ink); padding-top:12px;
+}
+.fin-empty, .fin-more{ color:var(--ink-muted); font-size:12.5px; }
+.fin-row-action{ text-align:right; white-space:nowrap; }
+.goal-meta{ font-size:11px; color:var(--ink-muted); margin-top:5px; display:flex; gap:10px; flex-wrap:wrap; }
+
+@media (max-width: 1080px){
+  .fin-hero{ grid-template-columns:1fr; }
+  .fin-stats{ grid-template-columns:repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px){
+  .fin-stats{ grid-template-columns:1fr; }
+  .fin-bars li{ grid-template-columns: minmax(0, 1fr) auto; row-gap:5px; }
+  .fb-track{ grid-column:1 / -1; order:3; }
+  .fb-share{ display:none; }
+  .fin-card-total{ font-size:17px; }
+}
+
+/* ---------- .stacks: a mini table as cards on a phone ---------- */
+@media (max-width: 900px){
+  table.mini.stacks, table.mini.stacks tbody, table.mini.stacks tr, table.mini.stacks td{ display:block; }
+  /* The header row is the first <tr> in these tables rather than a <thead>;
+     every cell carries its own label once the grid is gone. */
+  table.mini.stacks tr:first-child{ display:none; }
+  table.mini.stacks tr{
+    display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:9px 14px;
+    padding:13px 0; border-bottom:1px solid var(--border);
+  }
+  table.mini.stacks tr:last-child{ border-bottom:none; }
+  table.mini.stacks td{ border:none; padding:0; min-width:0; }
+  table.mini.stacks td[data-label]::before{
+    content:attr(data-label);
+    display:block; margin-bottom:3px;
+    font-size:10px; font-weight:650; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-muted);
+  }
+  /* The name and the row's own button each take the full width: one is the
+     card's heading, the other is its action. */
+  table.mini.stacks td:first-child{ grid-column:1 / -1; }
+  table.mini.stacks td.fin-row-action{ grid-column:1 / -1; text-align:left; }
+  table.mini.stacks td.num{ text-align:left; }
+  table.mini.stacks td:empty{ display:none; }
+  table.mini.stacks td[colspan]{ grid-column:1 / -1; }
+}
+
+/* The floating chat button sits bottom-right over everything. Without room
+   left for it, it covers the last row's Edit link on every long page. */
+main, .page-main{ padding-bottom:76px; }
+@media (max-width: 900px){ main, .page-main{ padding-bottom:96px; } }
+/* A second currency is a second figure, never folded into the first. */
+.fin-worth-alt{
+  font-size:16px; font-weight:600; color:var(--ink-secondary); margin-top:2px;
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+
+/* ==================================================================
+   Health, portfolio, company cards
+   ==================================================================
+   The verdict pill and its signal list are shared by the company and client
+   profiles. There is no score anywhere: lib/entityHealth.ts explains why, and
+   the signals are always rendered under the verdict so the reasoning is on
+   screen rather than in the code.
+*/
+.health-pill{
+  display:inline-flex; align-items:center; gap:7px; flex-shrink:0;
+  font-size:11.5px; font-weight:650; white-space:nowrap;
+  padding:4px 11px 4px 9px; border-radius:999px;
+  border:1px solid var(--hpb, var(--border-strong));
+  background:var(--hpbg, var(--field)); color:var(--hpc, var(--ink-secondary));
+}
+.health-pill.sm{ font-size:11px; padding:3px 9px 3px 8px; }
+.hp-dot{ width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; }
+.health-pill.critical{ --hpc:var(--critical-ink); --hpbg:var(--critical-bg); --hpb:color-mix(in oklab, var(--critical-ink) 30%, transparent); }
+.health-pill.warning{ --hpc:var(--warning-ink); --hpbg:var(--warning-bg); --hpb:color-mix(in oklab, var(--warning-ink) 30%, transparent); }
+.health-pill.good{ --hpc:var(--good-ink); --hpbg:var(--good-bg); --hpb:color-mix(in oklab, var(--good-ink) 30%, transparent); }
+.health-pill.neutral{ --hpc:var(--ink-muted); }
+
+.health-signals{ list-style:none; margin:0; padding:0; display:grid; gap:9px; }
+.health-signals li{ display:flex; gap:9px; align-items:flex-start; font-size:12px; min-width:0; }
+.hs-dot{ width:7px; height:7px; border-radius:50%; margin-top:5px; flex-shrink:0; background:var(--ink-muted); }
+.health-signals li.critical .hs-dot{ background:var(--critical); }
+.health-signals li.warning .hs-dot{ background:var(--warning); }
+.health-signals li.good .hs-dot{ background:var(--good); }
+.hs-body{ min-width:0; display:grid; gap:1px; }
+.hs-label{ font-weight:600; color:var(--ink); }
+.hs-detail{ color:var(--ink-muted); line-height:1.5; }
+.hs-more{ font-size:11.5px; color:var(--ink-muted); padding-left:16px; }
+
+/* ---------- the portfolio strip ---------- */
+.portfolio{ display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px; margin-bottom:16px; }
+.card.pf-stat{ padding:17px 19px 16px; display:flex; flex-direction:column; }
+/* A bar with a pace marker on it. Without the marker "28% of target" reads as
+   fine on the 29th of the month, which is the exact opposite of the truth. */
+.pf-track{
+  position:relative; height:7px; margin-top:11px; border-radius:99px;
+  background:var(--field); overflow:hidden;
+}
+.pf-fill{ display:block; height:100%; border-radius:99px; background:var(--blue); }
+.pf-fill.ahead{ background:var(--good); }
+.pf-fill.behind{ background:var(--warning); }
+.pf-pace{
+  position:absolute; top:-3px; bottom:-3px; width:2px; border-radius:2px;
+  background:var(--ink); opacity:0.55; transform:translateX(-1px);
+}
+
+/* ---------- company cards ---------- */
+/* A real grid. Each company used to get its own per-type wrapper containing a
+   three-column grid with one card in it, so three companies rendered as one
+   narrow column down the left of a 1500px page. */
+.co-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:14px; align-items:start; }
+.card.co-card{ padding:16px 18px 14px; display:flex; flex-direction:column; gap:12px; }
+.co-head{ display:flex; align-items:flex-start; gap:10px; }
+.co-dot{ width:9px; height:9px; border-radius:50%; margin-top:6px; flex-shrink:0; }
+.co-title{ min-width:0; flex:1; }
+.co-title h2{ margin:0; font-size:16px; font-weight:650; letter-spacing:-0.015em; }
+.co-title h2 a{ color:inherit; text-decoration:none; }
+.co-title h2 a:hover{ text-decoration:underline; text-underline-offset:3px; }
+.co-sub{ display:flex; gap:9px; flex-wrap:wrap; font-size:11.5px; color:var(--ink-muted); margin-top:2px; }
+.co-type{ font-weight:600; color:var(--ink-secondary); }
+.co-desc{
+  margin:0; font-size:12.5px; line-height:1.55; color:var(--ink-secondary);
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.co-facts{ display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; margin:0; padding:11px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+.co-facts dt{ font-size:10px; font-weight:650; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-muted); }
+.co-facts dd{ margin:3px 0 0 0; font-size:15px; font-weight:650; color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.co-facts dd.bad{ color:var(--critical-ink); }
+.co-target-top{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:11.5px; color:var(--ink-muted); }
+.co-target-amt{ color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.co-target-amt .of{ color:var(--ink-muted); font-weight:400; }
+.co-foot{ display:flex; align-items:center; gap:10px; margin-top:auto; padding-top:4px; }
+.co-open{ text-decoration:none; }
+
+@media (max-width: 1180px){ .portfolio{ grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px){
+  .portfolio{ grid-template-columns:1fr; }
+  .co-grid{ grid-template-columns:1fr; }
+  .co-facts{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+}
+
+/* ==================================================================
+   Company profile — one screen, not five tabs
+   ==================================================================
+   The old Overview tab held two lines of text and four tiles repeating the
+   header's own counts; everything that actually described the company was a
+   click away behind Projects / Goals / Team / Financials, so nobody clicked
+   and nobody ever saw the whole picture at once.
+*/
+.topbar.cp-topbar{ margin-bottom:10px; padding-bottom:0; border:none; }
+.cp-crumb{ font-size:12.5px; }
+
+.card.cp-head{ display:flex; gap:18px; align-items:flex-start; padding:20px 22px; margin-bottom:14px; }
+.cp-avatar{
+  width:56px; height:56px; border-radius:15px; flex-shrink:0;
+  display:grid; place-items:center; font-size:23px; font-weight:650; color:#fff;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,0.1);
+}
+.cp-ident{ min-width:0; flex:1; }
+.cp-name-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.cp-name-row h1{ margin:0; font-size:23px; font-weight:650; letter-spacing:-0.02em; }
+.cp-meta{ display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--ink-muted); margin-top:7px; }
+.cp-desc{ margin:10px 0 0 0; font-size:13px; line-height:1.6; color:var(--ink-secondary); max-width:70ch; }
+.cp-actions{ flex-shrink:0; }
+
+.cp-money{ display:grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap:14px; margin-bottom:14px; }
+.card.cp-money-main{ padding:18px 20px 16px; }
+.card.cp-money-side{
+  margin:0; padding:16px 20px;
+  display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:14px 18px;
+}
+.cp-money-side dt{ font-size:10.5px; font-weight:650; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-muted); }
+.cp-money-side dd{
+  margin:3px 0 0 0; font-size:16px; font-weight:650; color:var(--ink);
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.cp-money-side dd.good{ color:var(--good-ink); }
+.cp-money-side dd.bad{ color:var(--critical-ink); }
+.cp-money-side dd.warn{ color:var(--warning-ink); }
+
+/* Three columns, so the three short panels — clients, team, goals — fill one
+   row instead of each leaving half the page blank beside it. The tables span
+   the lot. */
+.cp-grid{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:14px; align-items:start; }
+.card.cp-panel{ padding:16px 20px 18px; }
+.cp-panel.cp-wide{ grid-column:1 / -1; }
+.cp-panel-head{ display:flex; align-items:baseline; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:12px; }
+.cp-panel-head h2{ margin:0; font-size:14.5px; font-weight:650; letter-spacing:-0.01em; }
+.cp-panel-head .section-sub{ margin:0; }
+.cp-empty{ margin:0; font-size:12.5px; color:var(--ink-muted); }
+.cp-note{ margin:0 0 12px 0; font-size:12.5px; line-height:1.6; color:var(--ink-secondary); }
+.cp-note.pre{ white-space:pre-wrap; }
+.cp-sub-label{ font-size:10.5px; font-weight:650; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-muted); margin-bottom:6px; }
+.cp-late{ color:var(--critical-ink); }
+
+.cp-list{ list-style:none; margin:0; padding:0; display:grid; gap:0; }
+.cp-list li{
+  display:flex; align-items:baseline; gap:12px; min-width:0;
+  font-size:12.5px; padding:9px 0; border-bottom:1px solid var(--border);
+}
+.cp-list li:last-child{ border-bottom:none; }
+.cp-list-main{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink); font-weight:550; }
+.cp-list-meta{ margin-left:auto; flex-shrink:0; color:var(--ink-muted); white-space:nowrap; }
+
+.cp-goals{ list-style:none; margin:0; padding:0; display:grid; gap:12px; }
+.cp-goal-top{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:12.5px; color:var(--ink); }
+.cp-goal-amt{ font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:600; }
+.cp-goal-amt .of{ color:var(--ink-muted); font-weight:400; }
+
+@media (max-width: 1240px){
+  .cp-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1080px){
+  .cp-money{ grid-template-columns:1fr; }
+  .cp-money-side{ grid-template-columns:repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px){
+  .cp-grid{ grid-template-columns:1fr; }
+  .card.cp-head{ flex-wrap:wrap; gap:14px; }
+  .cp-actions{ width:100%; }
+  .cp-money-side{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+}
+
+/* ---------- client profile ---------- */
+.cl-verdict{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:16px 0 14px; }
+.cl-last{ font-size:11.5px; color:var(--ink-muted); }
+.cl-money{
+  margin:0 0 16px 0; padding:14px 0; display:grid;
+  grid-template-columns:repeat(6, minmax(0, 1fr)); gap:14px;
+  border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+}
+.cl-money dt{ font-size:10.5px; font-weight:650; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-muted); }
+.cl-money dd{
+  margin:3px 0 0 0; font-size:15px; font-weight:650; color:var(--ink);
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.cl-money dd.good{ color:var(--good-ink); }
+.cl-money dd.bad{ color:var(--critical-ink); }
+.cl-money dd.warn{ color:var(--warning-ink); }
+/* The "Projects" cell holds words, not a figure — it must not be clipped by
+   the nowrap the money cells need. */
+.cl-money div:last-child dd{ font-size:12.5px; font-weight:600; white-space:normal; }
+.cl-notes{
+  margin:0; font-size:12.5px; line-height:1.65; color:var(--ink-secondary);
+  white-space:pre-wrap; padding:11px 13px; border-radius:var(--radius-sm);
+  background:var(--field); border:1px solid var(--border);
+}
+@media (max-width: 1240px){ .cl-money{ grid-template-columns:repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 620px){ .cl-money{ grid-template-columns:repeat(2, minmax(0, 1fr)); } }
