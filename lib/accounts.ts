@@ -1,21 +1,21 @@
-// Email + password accounts.
+// Email + password accounts — backed by Supabase.
 //
-// Why this exists alongside social login: deploying the app to a public URL
-// requires *isolated* accounts, otherwise every visitor shares one settings
-// bucket and would see whoever connected Notion last. Google/GitHub give that
-// isolation but require the operator to register OAuth apps first. This path
-// requires nothing at all, so a fresh deploy is self-serve from minute one.
+// Why Supabase instead of the KV store: account data (password hashes,
+// display names) belongs in a real database with backups, point-in-time
+// recovery, and no dependency on a local SQLite file surviving a deploy.
 //
-// Storage is the same KV store as everything else (SQLite locally, Postgres in
-// production), under `acct:<email>`. Nothing is kept beyond an email, an
-// optional display name, and a password verifier.
+// What stays in lib/store.ts: everything else — per-user Notion config
+// (encrypted tokens, database ID maps), sharing/invite state, install
+// owner. Those are tightly coupled to the KV API and have no benefit from
+// moving; separating auth storage from app config also keeps concerns clean.
 //
-// Hashing: scrypt from Node's crypto — memory-hard, in the standard library,
-// no dependency to audit. Parameters are stored alongside each hash so they
-// can be raised later without invalidating existing passwords.
+// The password format is unchanged: scrypt$N$r$p$saltB64$hashB64.
+// Existing accounts hashed by the old KV path use the same verifier string,
+// so a one-time migration (copy KV → Supabase) is all that would be needed
+// to carry over any existing users.
 
 import crypto from "crypto";
-import { getJSON, setJSON, store } from "@/lib/store";
+import { supabaseAdmin } from "@/lib/supabase";
 
 export interface StoredAccount {
   email: string;
@@ -29,17 +29,11 @@ export interface StoredAccount {
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 export const MIN_PASSWORD_LENGTH = 10;
 
-function accountKey(email: string) {
-  return `acct:${normaliseEmail(email)}`;
-}
-
 export function normaliseEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
 export function isValidEmail(email: string) {
-  // Deliberately permissive: the only thing that truly validates an address is
-  // delivering to it, and over-strict regexes reject real addresses.
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
 }
 
@@ -62,8 +56,6 @@ function hashPassword(password: string): string {
     N: SCRYPT.N,
     r: SCRYPT.r,
     p: SCRYPT.p,
-    // scrypt's default maxmem is too small for N=16384; raise it explicitly
-    // rather than quietly weakening the parameters.
     maxmem: 64 * 1024 * 1024,
   });
   return ["scrypt", SCRYPT.N, SCRYPT.r, SCRYPT.p, salt.toString("base64"), hash.toString("base64")].join("$");
@@ -81,8 +73,6 @@ function verifyPassword(password: string, verifier: string): boolean {
       p: Number(p),
       maxmem: 64 * 1024 * 1024,
     });
-    // Constant-time: a length check first, because timingSafeEqual throws on
-    // mismatched lengths and that throw would itself be a timing signal.
     if (actual.length !== expected.length) return false;
     return crypto.timingSafeEqual(actual, expected);
   } catch {
@@ -90,9 +80,42 @@ function verifyPassword(password: string, verifier: string): boolean {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Supabase row shape (matches the migration in lib/supabase.ts)       */
+/* ------------------------------------------------------------------ */
+
+interface AccountRow {
+  email: string;
+  name: string | null;
+  password_hash: string;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+function rowToAccount(row: AccountRow): StoredAccount {
+  return {
+    email: row.email,
+    name: row.name ?? undefined,
+    verifier: row.password_hash,
+    createdAt: row.created_at,
+    lastLoginAt: row.last_login_at ?? undefined,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* CRUD                                                                */
+/* ------------------------------------------------------------------ */
+
 export async function getAccount(email: string): Promise<StoredAccount | null> {
   if (!isValidEmail(email)) return null;
-  return getJSON<StoredAccount | null>(accountKey(email), null);
+  const { data, error } = await supabaseAdmin()
+    .from("orex_accounts")
+    .select("*")
+    .eq("email", normaliseEmail(email))
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return rowToAccount(data as AccountRow);
 }
 
 export async function accountExists(email: string): Promise<boolean> {
@@ -113,14 +136,23 @@ export async function createAccount(
     return { ok: false, error: "An account with that email already exists — sign in instead." };
   }
 
-  const account: StoredAccount = {
+  const now = new Date().toISOString();
+  const row: Omit<AccountRow, "last_login_at"> = {
     email: clean,
-    name: name?.trim() || undefined,
-    verifier: hashPassword(password),
-    createdAt: new Date().toISOString(),
+    name: name?.trim() || null,
+    password_hash: hashPassword(password),
+    created_at: now,
   };
-  await setJSON(accountKey(clean), account);
-  return { ok: true, account };
+
+  const { data, error } = await supabaseAdmin()
+    .from("orex_accounts")
+    .insert(row)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  return { ok: true, account: rowToAccount(data as AccountRow) };
 }
 
 /** Returns the account on success, null on any failure. Never says which. */
@@ -128,30 +160,34 @@ export async function authenticate(email: string, password: string): Promise<Sto
   const account = await getAccount(email);
 
   if (!account) {
-    // Spend comparable time on a miss so response timing doesn't reveal
-    // whether an address is registered.
+    // Spend comparable time so response timing doesn't reveal whether the
+    // address is registered.
     hashPassword(password);
     return null;
   }
 
   if (!verifyPassword(password, account.verifier)) return null;
 
-  await setJSON(accountKey(account.email), { ...account, lastLoginAt: new Date().toISOString() });
-  return account;
+  const loginAt = new Date().toISOString();
+  await supabaseAdmin()
+    .from("orex_accounts")
+    .update({ last_login_at: loginAt })
+    .eq("email", account.email);
+
+  return { ...account, lastLoginAt: loginAt };
 }
 
 export async function deleteAccount(email: string): Promise<void> {
-  await store().del(accountKey(email));
+  await supabaseAdmin()
+    .from("orex_accounts")
+    .delete()
+    .eq("email", normaliseEmail(email));
 }
 
 /* ------------------------------------------------------------------ */
-/* Throttling                                                          */
+/* Throttling (in-process; slows stuffing, not a hard stop)           */
 /* ------------------------------------------------------------------ */
 
-// Best-effort, in-process. On a serverless host each instance keeps its own
-// counters, so this slows credential stuffing rather than stopping it — the
-// real protections are scrypt's cost and the password rules above. It is here
-// because unbounded free guessing against a known address is worse.
 const attempts = new Map<string, { count: number; first: number }>();
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 10;
@@ -175,8 +211,6 @@ export function recordAttempt(identifier: string): void {
     return;
   }
   rec.count += 1;
-
-  // Keep the map from growing without bound on a long-lived instance.
   if (attempts.size > 5000) {
     for (const [k, v] of attempts) {
       if (now - v.first > WINDOW_MS) attempts.delete(k);

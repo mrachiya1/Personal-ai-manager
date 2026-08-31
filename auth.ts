@@ -21,6 +21,9 @@
 //    That keeps `npm run dev` working on a fresh clone. It is ONLY safe
 //    because it implies a machine only you can reach — never deploy to a
 //    public URL without AUTH_SECRET set.
+//
+// Role is resolved once per sign-in (via lib/profile.ts → Supabase) and
+// embedded in the JWT so every server component has it without a DB round-trip.
 
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
@@ -28,6 +31,8 @@ import GitHub from "next-auth/providers/github";
 import Apple from "next-auth/providers/apple";
 import Credentials from "next-auth/providers/credentials";
 import { authenticate, clearAttempts, normaliseEmail, recordAttempt, tooManyAttempts } from "@/lib/accounts";
+import { claimInstall } from "@/lib/installOwner";
+import { ensureProfile } from "@/lib/profile";
 
 const googleId = process.env.AUTH_GOOGLE_ID || process.env.GOOGLE_CLIENT_ID;
 const googleSecret = process.env.AUTH_GOOGLE_SECRET || process.env.GOOGLE_CLIENT_SECRET;
@@ -82,10 +87,6 @@ if (googleId && googleSecret) {
 if (githubId && githubSecret) {
   providers.push(GitHub({ clientId: githubId, clientSecret: githubSecret, allowDangerousEmailAccountLinking: true }));
 }
-// Apple lights up the moment its keys exist, same as the others. Its
-// "secret" is a signed JWT you generate from a .p8 key in the Apple
-// developer console and rotate every six months — worth knowing before you
-// go looking for a plain string to paste.
 const appleId = process.env["AUTH_APPLE_ID"];
 const appleSecret = process.env["AUTH_APPLE_SECRET"];
 if (appleId && appleSecret) {
@@ -123,9 +124,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   pages: { signIn: "/login", error: "/login" },
   callbacks: {
-    async signIn({ user }) {
-      return emailAllowed(user?.email);
+    async signIn({ user, profile }) {
+      if (!emailAllowed(user?.email)) return false;
+
+      // Claim install for this account if nobody has yet.
+      if (user?.email) {
+        try {
+          await claimInstall(user.email);
+        } catch {
+          // Non-fatal — next sign-in will retry.
+        }
+      }
+
+      return true;
     },
+
     async jwt({ token, profile, account, user }) {
       // Stabilise the user id across providers: prefer the email, because a
       // person signing in with a password today and Google tomorrow (same
@@ -136,11 +149,42 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.uid = user.email;
       }
       if (!token.uid) token.uid = token.email || token.sub;
+
+      // Embed role in token so server components never need a Supabase round-trip.
+      // Only (re-)read it on sign-in (account !== null) to avoid a DB hit on
+      // every JWT refresh. The role can be forced up-to-date by signing out and in.
+      if (account && token.uid) {
+        try {
+          const email = String(token.uid).replace(/^u:/, "");
+          const oauthName =
+            (profile as any)?.name ||
+            (profile as any)?.login ||        // GitHub uses `login`
+            user?.name ||
+            undefined;
+          const oauthAvatar =
+            (profile as any)?.picture ||
+            (profile as any)?.avatar_url ||   // GitHub
+            user?.image ||
+            undefined;
+          const p = await ensureProfile(email, { displayName: oauthName, avatarUrl: oauthAvatar });
+          token.role = p.role;                // "admin" | "member"
+          token.displayName = p.displayName;
+          token.avatarUrl = p.avatarUrl;
+        } catch {
+          // Supabase unavailable — default to member so we fail closed.
+          token.role = "member";
+        }
+      }
+
       return token;
     },
+
     async session({ session, token }) {
       if (session.user) {
         (session.user as any).id = (token.uid as string) || token.sub || "";
+        (session.user as any).role = (token.role as string) || "member";
+        (session.user as any).displayName = token.displayName as string | undefined;
+        (session.user as any).avatarUrl = token.avatarUrl as string | undefined;
       }
       return session;
     },
@@ -173,5 +217,16 @@ export async function currentUser() {
     return session?.user ?? null;
   } catch {
     return null;
+  }
+}
+
+/** The role for this request. Defaults to 'admin' in local (single-user) mode. */
+export async function currentRole(): Promise<"admin" | "member"> {
+  if (!AUTH_ENABLED) return "admin";
+  try {
+    const session = await auth();
+    return ((session?.user as any)?.role as "admin" | "member") || "member";
+  } catch {
+    return "member";
   }
 }

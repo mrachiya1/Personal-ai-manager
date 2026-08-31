@@ -65,63 +65,97 @@ export default async function LoginPage({
 
   return (
     <div className="auth-shell">
-      <div className="auth-card-wrap">
-        <div className="card auth-card">
-          <div className="ws-mark brand-serif auth-mark">O</div>
-
-          {!PASSWORD_LOGIN_ENABLED && (
-            <>
-              <h1 className="auth-title">Sign in to Orex OS</h1>
-              <p className="auth-sub">
-                Every account connects its own Notion workspace — your projects, finances and notes stay in your
-                Notion, never in a shared database here.
-              </p>
-            </>
-          )}
-
-          {errorMessage && <div className="auth-error">{errorMessage}</div>}
-
-          {PASSWORD_LOGIN_ENABLED && (
-            <LoginForm
-              callbackUrl={callbackUrl || "/"}
-              signupEnabled={SIGNUP_ENABLED}
-              minPasswordLength={MIN_PASSWORD_LENGTH}
-            />
-          )}
-
-          {PASSWORD_LOGIN_ENABLED && AVAILABLE_PROVIDERS.length > 0 && (
-            <div className="auth-or">
-              <span />
-              <em>or</em>
-              <span />
+      {/* ── Brand panel ── */}
+      <aside className="auth-brand" aria-hidden="true">
+        <div className="auth-brand-top">
+          <div className="auth-brand-mark">
+            <div className="auth-brand-o brand-serif">O</div>
+            <div>
+              <div className="auth-brand-name">Orex OS</div>
+              <div className="auth-brand-tagline">Personal &amp; Company Intelligence</div>
             </div>
-          )}
-
-          <div className="auth-providers">
-            {AVAILABLE_PROVIDERS.map((p) => (
-              <form
-                key={p.id}
-                action={async () => {
-                  "use server";
-                  await signIn(p.id, { redirectTo: callbackUrl || "/" });
-                }}
-              >
-                <button type="submit" className="btn-ghost auth-provider">
-                  {MARKS[p.id]}
-                  Continue with {p.name}
-                </button>
-              </form>
-            ))}
           </div>
 
-          <div className="auth-foot">
-            <strong>Your workspace is yours.</strong> After signing in, connect your own Notion integration token and
-            database IDs under <strong>Settings → Notion</strong>. Every query is scoped to the signed-in account, so
-            no other account can read your databases — and nothing is read from Notion until you connect it.
-          </div>
+          <h2 className="auth-brand-headline">
+            Your work.<br />
+            Your data.<br />
+            <em>Your Notion.</em>
+          </h2>
+          <p className="auth-brand-desc">
+            Every account connects its own Notion workspace — projects,
+            finances, and personal logs stay in your Notion, never in a
+            shared database here. Sign in to your isolated workspace.
+          </p>
         </div>
 
-        <div className="auth-tagline">Orex OS · Personal &amp; Company Intelligence</div>
+        {/* Decorative dot grid */}
+        <div className="auth-brand-dots" />
+
+        <div className="auth-brand-footer">
+          Orex OS · {new Date().getFullYear()}
+        </div>
+      </aside>
+
+      {/* ── Form panel ── */}
+      <div className="auth-form-panel">
+        <div className="auth-card-wrap">
+          <div className="card auth-card">
+
+            {!PASSWORD_LOGIN_ENABLED && (
+              <>
+                <h1 className="auth-title">Sign in to Orex OS</h1>
+                <p className="auth-sub">
+                  Connect your Notion workspace and pick up where you left off.
+                </p>
+              </>
+            )}
+
+            {errorMessage && <div className="auth-error">{errorMessage}</div>}
+
+            {PASSWORD_LOGIN_ENABLED && (
+              <LoginForm
+                callbackUrl={callbackUrl || "/"}
+                signupEnabled={SIGNUP_ENABLED}
+                minPasswordLength={MIN_PASSWORD_LENGTH}
+              />
+            )}
+
+            {PASSWORD_LOGIN_ENABLED && AVAILABLE_PROVIDERS.length > 0 && (
+              <div className="auth-or">
+                <span />
+                <em>or</em>
+                <span />
+              </div>
+            )}
+
+            <div className="auth-providers">
+              {AVAILABLE_PROVIDERS.map((p) => (
+                <form
+                  key={p.id}
+                  action={async () => {
+                    "use server";
+                    await signIn(p.id, { redirectTo: callbackUrl || "/" });
+                  }}
+                >
+                  <button type="submit" className="btn-ghost auth-provider">
+                    {MARKS[p.id]}
+                    Continue with {p.name}
+                  </button>
+                </form>
+              ))}
+            </div>
+
+            <div className="auth-foot">
+              <strong>Your workspace is yours.</strong> After signing in, connect
+              your own Notion integration token and database IDs under{" "}
+              <strong>Settings → Notion</strong>. Every query is scoped to the
+              signed-in account — nothing is read from Notion until you connect it.
+            </div>
+          </div>
+
+          {/* Shown only on mobile (brand panel is hidden) */}
+          <div className="auth-tagline">Orex OS · Personal &amp; Company Intelligence</div>
+        </div>
       </div>
     </div>
   );

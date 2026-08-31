@@ -25,6 +25,8 @@ interface NavItem {
   label: string;
   href: string;
   icon: ReactNode;
+  /** Hidden for role=member. Default false. */
+  adminOnly?: boolean;
 }
 
 interface NavGroup {
@@ -34,6 +36,8 @@ interface NavGroup {
   /** Groups can be folded away; the choice is remembered per browser. */
   collapsible?: boolean;
   addHref?: string;
+  /** Entire group hidden for members. */
+  adminOnly?: boolean;
 }
 
 const icon = (paths: ReactNode) => (
@@ -144,8 +148,17 @@ const ICONS = {
       <path d="M9.5 7h5M9.5 11h5M9.5 15h3" />
     </>
   ),
+  shared: icon(
+    <>
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="m8.7 10.7 6.6-3.4M8.7 13.3l6.6 3.4" />
+    </>
+  ),
 };
 
+// Items flagged adminOnly are hidden when role === "member".
 const GROUPS: NavGroup[] = [
   {
     key: "essentials",
@@ -155,8 +168,8 @@ const GROUPS: NavGroup[] = [
       { label: "Advisor Chat", href: "/advisor", icon: ICONS.chat },
       { label: "Projects", href: "/projects", icon: ICONS.projects },
       { label: "Render Queue", href: "/render-queue", icon: ICONS.queue },
-      { label: "Finance", href: "/finance", icon: ICONS.finance },
-      { label: "Slip Inbox", href: "/finance/slips", icon: ICONS.slips },
+      { label: "Finance", href: "/finance", icon: ICONS.finance, adminOnly: true },
+      { label: "Slip Inbox", href: "/finance/slips", icon: ICONS.slips, adminOnly: true },
     ],
   },
   {
@@ -175,15 +188,16 @@ const GROUPS: NavGroup[] = [
     label: "Growth",
     collapsible: true,
     items: [
-      { label: "Ideas Inbox", href: "/ideas", icon: ICONS.ideas },
+      { label: "Ideas Inbox", href: "/ideas", icon: ICONS.ideas, adminOnly: true },
       { label: "Learning", href: "/learning", icon: ICONS.learning },
-      { label: "Daily Logs", href: "/daily-logs", icon: ICONS.logs },
+      { label: "Daily Logs", href: "/daily-logs", icon: ICONS.logs, adminOnly: true },
     ],
   },
   {
     key: "self",
     label: "Self",
     collapsible: true,
+    adminOnly: true,
     items: [
       { label: "Astro Lab", href: "/astro-lab", icon: ICONS.astro },
       { label: "Sleep Cycle", href: "/sleep", icon: ICONS.sleep },
@@ -198,11 +212,19 @@ const GROUPS: NavGroup[] = [
   },
 ];
 
-const MOBILE_NAV = [
+const MOBILE_NAV_ADMIN = [
   { label: "Today", href: "/", icon: ICONS.home },
   { label: "Projects", href: "/projects", icon: ICONS.projects },
   { label: "Finance", href: "/finance", icon: ICONS.finance },
   { label: "Slips", href: "/finance/slips", icon: ICONS.slips },
+  { label: "Settings", href: "/settings", icon: ICONS.settings },
+];
+
+const MOBILE_NAV_MEMBER = [
+  { label: "Today", href: "/", icon: ICONS.home },
+  { label: "Projects", href: "/projects", icon: ICONS.projects },
+  { label: "Companies", href: "/companies", icon: ICONS.building },
+  { label: "Team", href: "/team", icon: ICONS.team },
   { label: "Settings", href: "/settings", icon: ICONS.settings },
 ];
 
@@ -246,12 +268,14 @@ function MoonIcon() {
 export default function Sidebar({
   workspaces = [],
   user = null,
+  role = "admin",
   workspaceLabel = "Orex OS",
   orgLabel = "Personal & Company Intelligence",
   authEnabled = false,
 }: {
   workspaces?: SidebarWorkspace[];
   user?: SidebarUser | null;
+  role?: "admin" | "member";
   workspaceLabel?: string;
   orgLabel?: string;
   authEnabled?: boolean;
@@ -262,6 +286,9 @@ export default function Sidebar({
   const [dark, setDark] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+
+  const isAdmin = role === "admin";
 
   useEffect(() => {
     setDark(document.documentElement.getAttribute("data-theme") === "dark");
@@ -276,8 +303,6 @@ export default function Sidebar({
     setPaletteOpen(false);
   }, [pathname]);
 
-  // ⌘K / ⌘F opens the palette. ⌘F is what the reference rail advertises, but
-  // browsers own it, so both are bound and ⌘K is the one that always lands.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "f")) {
@@ -309,8 +334,22 @@ export default function Sidebar({
     } catch {}
   }
 
-  const displayName = user?.name || user?.email?.split("@")[0] || "Your workspace";
-  const displayRole = user?.email || "Not signed in";
+  const displayName =
+    (user as any)?.displayName || user?.name || user?.email?.split("@")[0] || "Your workspace";
+  const displayEmail = user?.email || "";
+  const avatarUrl = (user as any)?.avatarUrl || user?.image;
+
+  // Filter nav groups and items by role
+  const visibleGroups = useMemo(() => {
+    return GROUPS.map((group) => {
+      if (group.adminOnly && !isAdmin) return null;
+      const visibleItems = group.items.filter((item) => isAdmin || !item.adminOnly);
+      if (visibleItems.length === 0) return null;
+      return { ...group, items: visibleItems };
+    }).filter(Boolean) as NavGroup[];
+  }, [isAdmin]);
+
+  const mobileNav = isAdmin ? MOBILE_NAV_ADMIN : MOBILE_NAV_MEMBER;
 
   return (
     <>
@@ -349,7 +388,7 @@ export default function Sidebar({
             stay put, so a nav taller than the viewport can never push the
             sign-out control off-screen. */}
         <div className="sidebar-scroll">
-        {GROUPS.map((group, gi) => {
+        {visibleGroups.map((group, gi) => {
           const isCollapsed = Boolean(group.collapsible && collapsed[group.key]);
           return (
             <div className="nav-group" key={group.key}>
@@ -374,8 +413,7 @@ export default function Sidebar({
                 ))}
               </div>
 
-              {/* The live company rail sits directly under Essentials, the way a
-                  real workspace switcher does — colour-coded, always current. */}
+              {/* The live company rail sits directly under Essentials */}
               {gi === 0 && workspaces.length > 0 && (
                 <div className="nav-group" style={{ marginTop: 2 }}>
                   <button
@@ -385,11 +423,13 @@ export default function Sidebar({
                   >
                     <Chevron />
                     <span className="label">Companies</span>
-                    <span className="tools">
-                      <span onClick={(e) => { e.stopPropagation(); router.push("/companies"); }}>
-                        <Plus />
+                    {isAdmin && (
+                      <span className="tools">
+                        <span onClick={(e) => { e.stopPropagation(); router.push("/companies"); }}>
+                          <Plus />
+                        </span>
                       </span>
-                    </span>
+                    )}
                   </button>
                   <div className={`nav-group-body${collapsed.workspaces ? " hidden" : ""}`}>
                     {workspaces.slice(0, 8).map((w) => (
@@ -410,28 +450,47 @@ export default function Sidebar({
         })}
         </div>
 
+        {/* ── User / account footer ── */}
         <div className="sidebar-footer">
           <div className="avatar">
-            {user?.image ? (
-              <Image src={user.image} alt="" width={26} height={26} unoptimized />
+            {avatarUrl ? (
+              <Image src={avatarUrl} alt="" width={28} height={28} unoptimized style={{ borderRadius: "50%", objectFit: "cover", width: 28, height: 28 }} />
             ) : (
               initials(displayName)
             )}
           </div>
           <div className="who">
-            <div className="name">{displayName}</div>
-            <div className="role">{displayRole}</div>
+            <div className="name">
+              {displayName}
+              <span
+                className="role-badge"
+                data-role={role}
+                title={isAdmin ? "Founder / Admin" : "Team member"}
+              >
+                {isAdmin ? "Admin" : "Member"}
+              </span>
+            </div>
+            <div className="role">{displayEmail || "Local workspace"}</div>
           </div>
           <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle dark mode">
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>
-          {/*
-            A button that signs out, not a link to Auth.js's own signout page.
-            That page is an unstyled confirmation form outside this app's
-            design, and — worse — landing on it does not end the session:
-            someone who clicks "sign out" and walks away is still signed in.
-            One click, one outcome.
-          */}
+          {isAdmin && authEnabled && (
+            <button
+              className="ws-action"
+              type="button"
+              title="Invite team member"
+              aria-label="Invite team member"
+              onClick={() => setInviteOpen(true)}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <line x1="19" y1="8" x2="19" y2="14" />
+                <line x1="22" y1="11" x2="16" y2="11" />
+              </svg>
+            </button>
+          )}
           {authEnabled && (
             <button
               className="ws-action"
@@ -447,12 +506,17 @@ export default function Sidebar({
             </button>
           )}
         </div>
+
+        {/* ── Invite modal ── */}
+        {inviteOpen && (
+          <InviteModal onClose={() => setInviteOpen(false)} />
+        )}
       </aside>
 
       {paletteOpen && (
         <CommandPalette
           onClose={() => setPaletteOpen(false)}
-          groups={GROUPS}
+          groups={visibleGroups}
           workspaces={workspaces}
           onGo={(href) => {
             setPaletteOpen(false);
@@ -462,7 +526,7 @@ export default function Sidebar({
       )}
 
       <nav className="mobile-bottom-nav">
-        {MOBILE_NAV.map((item) => (
+        {mobileNav.map((item) => (
           <Link key={item.href} href={item.href} className={`mobile-bottom-nav-item${pathname === item.href ? " active" : ""}`}>
             <span className="nav-icon">{item.icon}</span>
             <span>{item.label}</span>
@@ -486,90 +550,145 @@ function CommandPalette({
   onGo: (href: string) => void;
 }) {
   const [q, setQ] = useState("");
-  const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
+  const all = useMemo(() => {
+    const rows: { label: string; href: string }[] = [];
+    for (const g of groups) for (const it of g.items) rows.push({ label: it.label, href: it.href });
+    for (const w of workspaces) rows.push({ label: w.name, href: w.href });
+    return rows;
+  }, [groups, workspaces]);
+
   const results = useMemo(() => {
-    const all = [
-      ...groups.flatMap((g) => g.items.map((i) => ({ label: i.label, href: i.href, group: g.label, color: null as string | null }))),
-      ...workspaces.map((w) => ({ label: w.name, href: w.href, group: "Companies", color: w.colorVar })),
-    ];
-    const needle = q.trim().toLowerCase();
-    if (!needle) return all.slice(0, 10);
-    return all.filter((r) => r.label.toLowerCase().includes(needle) || r.group.toLowerCase().includes(needle)).slice(0, 10);
-  }, [q, groups, workspaces]);
+    if (!q.trim()) return all.slice(0, 8);
+    const lq = q.toLowerCase();
+    return all.filter((r) => r.label.toLowerCase().includes(lq)).slice(0, 8);
+  }, [q, all]);
 
-  useEffect(() => {
-    setCursor(0);
-  }, [q]);
+  return (
+    <div className="palette-backdrop" onClick={onClose}>
+      <div className="palette" onClick={(e) => e.stopPropagation()}>
+        <input
+          ref={inputRef}
+          className="palette-input"
+          placeholder="Jump to…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") onClose();
+            if (e.key === "Enter" && results[0]) onGo(results[0].href);
+          }}
+        />
+        <div className="palette-results">
+          {results.map((r) => (
+            <button key={r.href} className="palette-row" onClick={() => onGo(r.href)}>
+              {r.label}
+            </button>
+          ))}
+          {results.length === 0 && <div className="palette-empty">No results</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-  function onKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setCursor((c) => Math.min(c + 1, results.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setCursor((c) => Math.max(c - 1, 0));
-    } else if (e.key === "Enter" && results[cursor]) {
-      e.preventDefault();
-      onGo(results[cursor].href);
+/* ──────────────────────────────────────────────────────
+   Invite modal — admin generates a one-click join link
+   ────────────────────────────────────────────────────── */
+function InviteModal({ onClose }: { onClose: () => void }) {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [link, setLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  async function generate(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Couldn't create invite");
+      setLink(data.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setBusy(false);
     }
   }
 
+  async function copy() {
+    if (!link) return;
+    await navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ alignItems: "flex-start", paddingTop: "12vh" }}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460, padding: 0, overflow: "hidden" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "13px 16px", borderBottom: "1px solid var(--border)" }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--ink-muted)" strokeWidth="2" strokeLinecap="round">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-          <input
-            ref={inputRef}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Jump to a page or company…"
-            style={{ border: "none", outline: "none", background: "transparent", fontSize: 14, width: "100%", color: "var(--ink)", fontFamily: "inherit" }}
-          />
-          <span className="kbd" style={{ fontSize: 10.5, border: "1px solid var(--border)", borderRadius: 5, padding: "1px 5px", color: "var(--ink-muted)" }}>
-            esc
-          </span>
+    <div className="invite-backdrop" onClick={onClose}>
+      <div className="invite-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="invite-modal-header">
+          <span className="invite-modal-title">Invite team member</span>
+          <button className="invite-modal-close" onClick={onClose} aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </div>
-        <div style={{ maxHeight: 340, overflowY: "auto", padding: 6 }}>
-          {results.length === 0 ? (
-            <div style={{ padding: "18px 12px", fontSize: 12.5, color: "var(--ink-muted)", textAlign: "center" }}>
-              Nothing matches “{q}”.
-            </div>
-          ) : (
-            results.map((r, i) => (
-              <button
-                key={`${r.href}-${r.label}`}
-                onClick={() => onGo(r.href)}
-                onMouseEnter={() => setCursor(i)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
-                  padding: "9px 10px", borderRadius: 8, border: "none", cursor: "pointer",
-                  fontFamily: "inherit", fontSize: 13,
-                  background: i === cursor ? "var(--rail)" : "transparent",
-                  color: "var(--ink)",
-                }}
-              >
-                {r.color ? (
-                  <span className="nav-swatch" style={{ ["--swatch-color" as string]: `var(${r.color})` }}>{initials(r.label)}</span>
-                ) : (
-                  <span className="nav-swatch" style={{ background: "var(--border-strong)" }} />
-                )}
-                <span style={{ fontWeight: 550 }}>{r.label}</span>
-                <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--ink-muted)" }}>{r.group}</span>
+
+        {!link ? (
+          <form onSubmit={generate} className="invite-form">
+            <p className="invite-desc">
+              Enter their email. They&apos;ll get a link to set up their own account and connect their own Notion workspace — they won&apos;t see any of your personal data.
+            </p>
+            {error && <div className="auth-error" style={{ marginBottom: 12 }}>{error}</div>}
+            <label className="auth-label">Email address</label>
+            <input
+              ref={inputRef}
+              className="auth-input"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="teammate@example.com"
+            />
+            <button type="submit" className="btn-primary invite-submit" disabled={busy}>
+              {busy ? "Generating…" : "Generate invite link"}
+            </button>
+          </form>
+        ) : (
+          <div className="invite-result">
+            <p className="invite-desc">
+              Send this link to <strong>{email}</strong>. It expires in 7 days and can only be used once.
+            </p>
+            <div className="invite-link-row">
+              <input className="auth-input invite-link-input" value={link} readOnly />
+              <button className="btn-primary invite-copy-btn" onClick={copy}>
+                {copied ? "Copied!" : "Copy"}
               </button>
-            ))
-          )}
-        </div>
+            </div>
+            <button
+              className="btn-ghost"
+              style={{ marginTop: 10, fontSize: 12.5 }}
+              onClick={() => { setLink(null); setEmail(""); }}
+            >
+              Generate another
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

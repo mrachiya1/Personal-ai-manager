@@ -5,7 +5,7 @@ import ChatWidget from "@/components/ChatWidget";
 import { getCompanies, notionConnected, unmappedDatabases } from "@/lib/notion";
 import SetupBanner from "@/components/SetupBanner";
 import { DB_KEYS } from "@/lib/userConfig";
-import { AUTH_ENABLED, currentUser } from "@/auth";
+import { AUTH_ENABLED, currentRole, currentUser } from "@/auth";
 
 /**
  * Nothing in this app may be prerendered at build time.
@@ -60,6 +60,7 @@ async function loadWorkspaces(): Promise<SidebarWorkspace[]> {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const user = await currentUser();
+  const role = await currentRole();
 
   // When logins are on and nobody is signed in, the only page that renders is
   // /login (middleware sends everything else there) — so it gets the bare
@@ -92,9 +93,15 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 <Sidebar
                   workspaces={workspaces}
                   user={user}
+                  role={role}
                   authEnabled={AUTH_ENABLED}
                   workspaceLabel="Orex OS"
-                  orgLabel={user?.email || user?.name || "Personal workspace"}
+                  orgLabel={
+                    (user as any)?.displayName ||
+                    user?.name ||
+                    user?.email ||
+                    "Personal workspace"
+                  }
                 />
                 <main className="main">
                   <SetupBanner unmappedCount={unmapped.length} total={DB_KEYS.length} />
