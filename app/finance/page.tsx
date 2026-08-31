@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { currentRole } from "@/auth";
 import {
   getFinanceGoals,
   getWishlistItems,
@@ -68,6 +70,9 @@ export default async function FinancePage({
 }: {
   searchParams: Promise<{ period?: string }>;
 }) {
+  const role = await currentRole();
+  if (role === "member") redirect("/companies");
+
   const { period: periodKey } = await searchParams;
   const companies = (await notionConnected()) ? await getCompanies() : [];
   const accounts = (await notionConnected()) ? await getAccounts() : [];

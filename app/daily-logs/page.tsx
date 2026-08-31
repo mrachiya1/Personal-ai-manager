@@ -1,8 +1,13 @@
+import { redirect } from "next/navigation";
+import { currentRole } from "@/auth";
 import { getDailyLogs, notionConnected } from "@/lib/notion";
 import ConnectPrompt from "@/components/ConnectPrompt";
 import DailyLogCapture from "@/components/DailyLogCapture";
 
 export default async function DailyLogsPage() {
+  const role = await currentRole();
+  if (role === "member") redirect("/companies");
+
   return (
     <>
       <div className="topbar">

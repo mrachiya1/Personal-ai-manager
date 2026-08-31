@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { currentRole } from "@/auth";
 import { buildTodayView, money } from "@/lib/uiState";
 import { formatLocalTime } from "@/lib/timezone";
 import ConnectPrompt from "@/components/ConnectPrompt";
@@ -38,6 +40,9 @@ function groupName(names: string[]): string {
  * rather than guess at: there is only one place the number is computed.
  */
 export default async function TodayPage() {
+  const role = await currentRole();
+  if (role === "member") redirect("/companies");
+
   const view = await buildTodayView();
   const { ctx, offset, now, greeting, energy, cards, schedule, overrides, workWindow, plan } = view;
 

@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { currentRole } from "@/auth";
 import { getIdeas, getCompanies, getProjects, notionConnected } from "@/lib/notion";
 import ConnectPrompt from "@/components/ConnectPrompt";
 import IdeaCapture from "@/components/IdeaCapture";
@@ -5,6 +7,9 @@ import IdeaCapture from "@/components/IdeaCapture";
 const priorityBadge: Record<string, string> = { Now: "badge high", Later: "badge med", Someday: "badge pending" };
 
 export default async function IdeasPage() {
+  const role = await currentRole();
+  if (role === "member") redirect("/companies");
+
   return (
     <>
       <div className="topbar">
