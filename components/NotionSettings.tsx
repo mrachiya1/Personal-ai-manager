@@ -395,6 +395,40 @@ export function AccountDataCard({ authEnabled }: { authEnabled: boolean }) {
 
 /* ------------------------------------------------------------------ */
 
+/**
+ * Admin-only: downloads a backup of this app's own Supabase tables (accounts
+ * + profiles) — not Notion data, which already lives safely in each user's
+ * own workspace. See app/api/account/supabase-backup/route.ts for what's
+ * included (no password hashes).
+ */
+export function SupabaseBackupCard() {
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <span className="panel-title">Supabase backup</span>
+        <span className="badge low">Admin only</span>
+        <div className="spacer" />
+        <a className="filter-btn" href="/api/account/supabase-backup" download>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 4v12M7 11l5 5 5-5" />
+            <path d="M4 20h16" />
+          </svg>
+          Download backup
+        </a>
+      </div>
+      <div style={{ padding: "14px 16px 16px 16px" }}>
+        <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.7, color: "var(--ink-secondary)" }}>
+          Downloads every account and profile row from this install&apos;s Supabase database — who has signed up and
+          their role — as a JSON file. Password hashes are never included. This covers the app&apos;s own account
+          table, not anyone&apos;s Notion data, which stays in their own workspace either way.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
 interface SchemaCheckRow {
   name: string;
   present: boolean;

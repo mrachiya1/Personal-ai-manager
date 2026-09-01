@@ -4,11 +4,11 @@ import { setting } from "@/lib/settings";
 import { store } from "@/lib/store";
 import { encryptionAvailable, maskSecret, decryptSecret } from "@/lib/secrets";
 import { DB_KEYS, DB_LABELS, getDbMap, getUserConfig } from "@/lib/userConfig";
-import { AUTH_ENABLED, currentUser } from "@/auth";
+import { AUTH_ENABLED, currentUser, currentRole } from "@/auth";
 import { oauthConfigured } from "@/app/api/notion/oauth/route";
 import ThemeToggleRow from "@/components/ThemeToggleRow";
 import { SettingsSection } from "@/components/SettingsForm";
-import { AccountDataCard, DatabaseMappingCard, NotionConnectCard, ProjectFieldsCard } from "@/components/NotionSettings";
+import { AccountDataCard, DatabaseMappingCard, NotionConnectCard, ProjectFieldsCard, SupabaseBackupCard } from "@/components/NotionSettings";
 import { PreferencesCard, SettingsTabs } from "@/components/AccountSettings";
 
 export const dynamic = "force-dynamic";
@@ -28,11 +28,12 @@ function Row({ label, value, ok }: { label: string; value: string; ok: boolean }
 }
 
 export default async function SettingsPage() {
-  const [notionOk, cfg, dbMap, user] = await Promise.all([
+  const [notionOk, cfg, dbMap, user, role] = await Promise.all([
     notionConnected(),
     getUserConfig(),
     getDbMap(),
     currentUser(),
+    currentRole(),
   ]);
 
   const ownToken = decryptSecret(cfg.notionTokenEnc);
@@ -306,6 +307,7 @@ export default async function SettingsPage() {
                 </div>
 
                 <AccountDataCard authEnabled={AUTH_ENABLED} />
+                {role === "admin" && <SupabaseBackupCard />}
               </>
             ),
           },
